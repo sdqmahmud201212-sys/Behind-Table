@@ -1,24 +1,24 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+
 import {
   getAuth,
   signInAnonymously,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+
 import {
   getDatabase,
   ref,
-  get,
   set,
+  get,
   update,
   onValue,
-  runTransaction
+  runTransaction,
+  remove
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
 
-/* =====================================
-   FIREBASE
-===================================== */
-
+/* FIREBASE */
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyBFFVigbO3r5vZbl7vfgzVboChHjXn2h-A",
@@ -35,6 +35,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app, "https://behind-table-default-rtdb.firebaseio.com");
 
+/* PERSONAJLAR */
 const CHARACTERS = [
   "Moto moto",
   "Polat Amımdar",
@@ -48,553 +49,298 @@ const CHARACTERS = [
   "Çuban Ələddin"
 ];
 
-const $ = id => document.getElementById(id);
-
+/* DƏYİŞƏNLƏR */
 let uid = null;
 let currentRoom = null;
-let roomUnsub = null;
 let roomData = null;
-let selectedTarget = null;
+let roomUnsub = null;
 let busy = false;
 let lastEffectId = null;
-let roomSnapshotInitialized = false;
 
-const screens = ["home", "lobby", "game", "ended"];
+const $ = id => document.getElementById(id);
 
-/* =====================================
-   ÜMUMİ FUNKSİYALAR
-===================================== */
-
-function showScreen(name) {
-  screens.forEach(id => {
-    $(id).classList.toggle("active", id === name);
+/* EKRANLAR */
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(screen => {
+    screen.classList.remove("active");
   });
 
-  window.scrollTo(0, 0);
+  $(id)?.classList.add("active");
 }
 
-function toast(message) {
+function message(text) {
+  $("homeError").textContent = text;
+}
+
+function toast(text) {
   const el = $("toast");
-  el.textContent = message;
+  el.textContent = text;
   el.classList.add("show");
 
-  clearTimeout(toast.timer);
-
-  toast.timer = setTimeout(() => {
-    el.classList.remove("show");
-  }, 2600);
+  setTimeout(() => el.classList.remove("show"), 2500);
 }
 
-function setError(id, message) {
-  $(id).textContent = message || "";
+function setConnection(text) {
+  $("connection").textContent = text;
 }
 
-function cleanName(value) {
-  return value.trim()
-    .replace(/[.#$/\[\]]/g, "")
-    .slice(0, 18);
-}
+/* AUTH */
+const authReady = new Promise((resolve, reject) => {
+  signInAnonymously(auth).catch(reject);
 
-function code4() {
-  return Math.random().toString(36).slice(2, 6).toUpperCase();
-}
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      uid = user.uid;
+      setConnection("BAĞLANTI QURULDU");
+      resolve(user);
+    }
+  });
+});
 
-function roomRef(code) {
-  return ref(db, `rooms/${code}`);
-}
+authReady.catch(error => {
+  console.error("Firebase Auth:", error);
+  setConnection("BAĞLANTI XƏTASI");
+  message("Firebase bağlantısı qurulmadı: " + error.message);
+});
 
-function me() {
-  return roomData?.players?.[uid] || null;
-}
+/* KOD YARATMA */
+function generateCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
 
-function alivePlayers(data = roomData) {
-  return Object.values(data?.players || {})
-    .filter(player => player.alive !== false);
-}
-
-function isHost() {
-  return !!roomData && roomData.hostId === uid;
-}
-
-function currentTurn() {
-  return roomData?.game?.turnPlayerId === uid;
-}
-
-function logEntry(text) {
-  return {
-    text,
-    at: Date.now()
-  };
-}
-
-function addLog(state, text) {
-  state.game.log = state.game.log || [];
-  state.game.log.push(logEntry(text));
-
-  if (state.game.log.length > 30) {
-    state.game.log = state.game.log.slice(-30);
-  }
-}
-
-function escapeHtml(str = "") {
-  return String(str).replace(/[&<>"']/g, ch => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  }[ch]));
-}
-
-function firebaseMessage(error) {
-  const code = error?.code || "";
-
-  if (code.includes("permission-denied")) {
-    return "Firebase icazə vermədi. Database Rules bölməsini yoxla.";
+  for (let i = 0; i < 4; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
   }
 
-  if (code.includes("unauthorized-domain")) {
-    return "GitHub Pages domenini Firebase Authorized domains bölməsinə əlavə et.";
-  }
-
-  if (code.includes("network")) {
-    return "İnternet bağlantısını yoxla.";
-  }
-
-  if (code.includes("auth/operation-not-allowed")) {
-    return "Anonymous Authentication aktiv deyil.";
-  }
-
-  return error?.message || "Naməlum xəta baş verdi.";
+  return code;
 }
 
-/* =====================================
-   OTAQ SİNXRONİZASİYASI
-===================================== */
-
+/* OTAĞA QULAQ ASMA */
 function subscribeRoom(code) {
   if (roomUnsub) roomUnsub();
 
   currentRoom = code;
-  roomSnapshotInitialized = false;
   lastEffectId = null;
 
-  roomUnsub = onValue(roomRef(code), snap => {
-    if (!snap.exists()) {
-      toast("Otaq tapılmadı.");
-      leaveRoom(false);
+  const roomRef = ref(db, "rooms/" + code);
+
+  roomUnsub = onValue(roomRef, snapshot => {
+    if (!snapshot.exists()) {
+      toast("Otaq artıq mövcud deyil.");
+      currentRoom = null;
+      showScreen("home");
       return;
     }
 
-    const nextData = snap.val();
+    roomData = snapshot.val();
 
-    // İlk yükləmədə köhnə atəş animasiyasını oynatma.
-    if (!roomSnapshotInitialized) {
-      lastEffectId = nextData?.game?.lastShot?.id ?? null;
-      roomSnapshotInitialized = true;
+    if (lastEffectId === null) {
+      lastEffectId = roomData.lastShot?.id || "";
+    } else if (
+      roomData.lastShot?.id &&
+      roomData.lastShot.id !== lastEffectId
+    ) {
+      lastEffectId = roomData.lastShot.id;
     }
 
-    roomData = nextData;
     renderRoom();
-
   }, error => {
-    toast("Otaq oxunmadı: " + error.message);
+    console.error(error);
+    toast("Otaq məlumatı yüklənmədi.");
   });
 }
 
-/* =====================================
-   LOBBİ
-===================================== */
-
-function renderRoom() {
-  if (!roomData) return;
-
-  const state = roomData.state || "lobby";
-
-  $("roomCodeDisplay").textContent = currentRoom;
-  $("gameRoomCode").textContent = currentRoom;
-
-  const players = Object.entries(roomData.players || {});
-
-  $("playerCount").textContent = `${players.length}/10`;
-
-  $("playerList").innerHTML = players.map(([id, player]) => `
-    <div class="player-row">
-      <span>
-        ${escapeHtml(player.name)}
-        ${id === uid ? '<b class="you"> (SƏN)</b>' : ""}
-      </span>
-
-      <span class="role">
-        ${id === roomData.hostId
-          ? "HOST"
-          : escapeHtml(player.character || "")}
-      </span>
-    </div>
-  `).join("");
-
-  $("characterSelect").value =
-    me()?.character || CHARACTERS[0];
-
-  $("startGame").style.display =
-    isHost() ? "block" : "none";
-
-  $("lobbyHint").textContent = isHost()
-    ? "Hazır olan dostlarınla oyuna başla. Minimum 2, maksimum 10 oyunçu."
-    : "Host oyunu başladana qədər gözlə.";
-
-  if (state === "lobby") {
-    showScreen("lobby");
-  }
-
-  if (state === "playing") {
-    showScreen("game");
-    renderGame();
-  }
-
-  if (state === "ended") {
-    showScreen("ended");
-    renderEnd();
-  }
-}
-
-/* =====================================
-   OYUN EKRANI
-===================================== */
-
-function renderGame() {
-  if (!roomData?.game) return;
-
-  const g = roomData.game;
-  const alive = alivePlayers();
-
-  $("aliveCount").textContent = `${alive.length} OYUNÇU`;
-  $("roundLabel").textContent = `GÜLLƏLİ FİLDƏ ${g.chamber + 1}/6`;
-
-  const turn = roomData.players?.[g.turnPlayerId];
-
-  $("turnLabel").textContent = turn
-    ? `NÖVBƏ: ${turn.character || turn.name}`
-    : "NÖVBƏ BİTDİ";
-
-  const all = Object.entries(roomData.players || {});
-
-  // Personajların dairəvi yerləşməsi.
-  const centerX = 50;
-  const centerY = 50;
-  const rx = 33;
-  const ry = 33;
-
-  const seats = all.map(([id, player], index) => {
-    const angle =
-      (-Math.PI / 2) +
-      (2 * Math.PI * index / Math.max(all.length, 1));
-
-    const x = centerX + rx * Math.cos(angle);
-    const y = centerY + ry * Math.sin(angle);
-
-    const character = player.character || player.name;
-
-    return `
-      <div
-        class="seat ${player.alive === false ? "dead" : ""} ${id === g.turnPlayerId ? "current" : ""}"
-        style="left:${x}%;top:${y}%"
-      >
-        <div class="avatar">
-          ${escapeHtml(character.slice(0, 1).toUpperCase())}
-        </div>
-
-        <div class="seat-name">
-          ${escapeHtml(character)}
-        </div>
-
-        <div class="seat-char">
-          ${escapeHtml(player.name)}
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  const shot = g.lastShot;
-
-  // Retro atəş animasiyası.
-  const effect = shot ? `
-    <div class="shot-effect ${shot.hit ? "hit" : "empty"}">
-      <div class="shot-burst"></div>
-
-      <div class="shot-word">
-        ${shot.hit ? "BANG!" : "CLICK!"}
-      </div>
-
-      <div class="shot-caption">
-        ${shot.hit ? "GÜLLƏ DƏYDİ" : "BOŞ ÇIXDI"}
-      </div>
-    </div>
-  ` : "";
-
-  $("seatList").innerHTML = seats + `
-    <div class="table-gun">
-      <svg viewBox="0 0 180 90" aria-hidden="true">
-        <path class="gun-barrel"
-          d="M88 30 L164 30 L164 48 L88 48 Z"/>
-
-        <path class="gun-top"
-          d="M78 26 L111 26 L111 52 L78 52 Z"/>
-
-        <circle class="gun-cylinder"
-          cx="75" cy="39" r="18"/>
-
-        <circle class="gun-cylinder-hole"
-          cx="75" cy="39" r="8"/>
-
-        <path class="gun-frame"
-          d="M57 29 L39 29 Q28 29 28 40 Q28 51 40 51 L56 51 L68 60 L91 60 L103 51 L103 27 L88 27 L88 34 L65 34 Z"/>
-
-        <path class="gun-handle"
-          d="M49 49 L70 54 L62 82 Q60 87 54 84 L39 75 Q35 72 39 66 Z"/>
-
-        <path class="gun-trigger"
-          d="M94 51 Q107 59 96 68" fill="none"/>
-
-        <circle class="gun-screw"
-          cx="48" cy="40" r="3"/>
-      </svg>
-    </div>
-
-    ${effect}
-  `;
-
-  // Yalnız yeni atəşdə animasiya oynayır.
-  if (shot && String(shot.id) !== String(lastEffectId)) {
-    lastEffectId = shot.id;
-
-    const effectElement =
-      $("seatList").querySelector(".shot-effect");
-
-    if (effectElement) {
-      effectElement.classList.add("play");
-    }
-  }
-
-  const canAct =
-    currentTurn() && me()?.alive !== false;
-
-  $("actionTitle").textContent = canAct
-    ? "SƏNİN NÖVBƏNDİR"
-    : "NÖVBƏ GÖZLƏNİLİR";
-
-  $("actionDescription").textContent = canAct
-    ? "Hədəf seç. Özünü də hədəf göstərə bilərsən. Seçimini təsdiqləyəndən sonra atəş açılacaq."
-    : turn
-      ? `${turn.character || turn.name} hədəf seçir...`
-      : "Oyun davam edir.";
-
-  const targets = Object.entries(roomData.players || {})
-    .filter(([id, player]) =>
-      id !== uid && player.alive !== false
-    );
-
-  const options = canAct
-    ? [...targets, [uid, me()]]
-    : [];
-
-  $("targetArea").innerHTML = options.map(([id, player]) => `
-    <button
-      class="target-option ${selectedTarget === id ? "selected" : ""}"
-      data-target="${id}"
-    >
-      ${escapeHtml(player.character || player.name)}
-      ${id === uid ? " (ÖZÜN)" : ""}
-      <small>${escapeHtml(player.name)}</small>
-    </button>
-  `).join("");
-
-  $("targetArea")
-    .querySelectorAll("[data-target]")
-    .forEach(button => {
-      button.addEventListener("click", () => {
-        selectedTarget = button.dataset.target;
-        renderGame();
-      });
-    });
-
-  $("shootButton").disabled =
-    !canAct || !selectedTarget || busy;
-
-  $("shootButton").textContent = busy
-    ? "GÖZLƏ..."
-    : "HƏDƏFİ TƏSDİQLƏ VƏ ATƏŞ AÇ";
-
-  $("shotResult").textContent = shot
-    ? `${shot.hit ? "GÜLLƏ DƏYDİ" : "BOŞ ÇIXDI"} — ${shot.shooterName} → ${shot.targetName}`
-    : "";
-
-  const log = (g.log || []).slice().reverse();
-
-  $("eventLog").innerHTML = log.map(item => `
-    <div class="event">${escapeHtml(item.text)}</div>
-  `).join("");
-}
-
-/* =====================================
-   QALİB EKRANI
-===================================== */
-
-function renderEnd() {
-  const alive = alivePlayers();
-  const winner = alive[0];
-
-  $("winnerTitle").textContent = winner
-    ? (winner.character || winner.name)
-    : "HEÇ KİM";
-
-  $("winnerText").textContent = winner
-    ? `${winner.name} — MASANIN SONUNCU SAHİBİ.`
-    : "Bu oyunda qalib olmadı.";
-}
-
-/* =====================================
-   OTAQ YARAT
-===================================== */
-
+/* OTAQ YARAT */
 async function createRoom() {
-  const name = cleanName($("nickname").value);
-
-  if (!name) {
-    setError("homeError", "Əvvəlcə oyunçu adını yaz.");
-    return;
-  }
-
-  if (!uid) {
-    setError("homeError", "Firebase girişini gözlə.");
-    return;
-  }
-
-  setError("homeError", "");
+  if (busy) return;
   busy = true;
+  message("");
 
   try {
+    await authReady;
+
+    const nickname = $("nickname").value.trim();
+
+    if (!nickname) {
+      message("Əvvəlcə oyunçu adını yaz.");
+      return;
+    }
+
+    setConnection("OTAQ YARADILIR...");
+
     let code;
+    let roomRef;
     let exists = true;
 
-    for (let i = 0; i < 8 && exists; i++) {
-      code = code4();
-      const snap = await get(roomRef(code));
-      exists = snap.exists();
+    for (let i = 0; i < 10; i++) {
+      code = generateCode();
+      roomRef = ref(db, "rooms/" + code);
+
+      const snapshot = await get(roomRef);
+
+      if (!snapshot.exists()) {
+        exists = false;
+        break;
+      }
     }
 
-    if (exists) {
-      throw new Error("Unikal otaq kodu yaradıla bilmədi.");
-    }
+    if (exists) throw new Error("Otaq kodu yaradıla bilmədi.");
 
-    const player = {
-      name,
-      character: CHARACTERS[
-        Math.floor(Math.random() * CHARACTERS.length)
-      ],
-      alive: true,
-      joinedAt: Date.now()
+    const room = {
+      code,
+      host: uid,
+      status: "lobby",
+      round: 1,
+      currentTurn: uid,
+      players: {
+        [uid]: {
+          name: nickname,
+          character: CHARACTERS[0],
+          alive: true,
+          joinedAt: Date.now()
+        }
+      },
+      events: {
+        0: nickname + " otağı yaratdı."
+      }
     };
 
-    await set(roomRef(code), {
-      hostId: uid,
-      state: "lobby",
-      createdAt: Date.now(),
-      players: {
-        [uid]: player
-      }
-    });
+    await set(roomRef, room);
 
-    selectedTarget = null;
     subscribeRoom(code);
+    showScreen("lobby");
+    toast("Otaq yaradıldı!");
 
   } catch (error) {
-    setError("homeError", firebaseMessage(error));
+    console.error("Otaq yaratma xətası:", error);
+    message("Xəta: " + error.message);
+    setConnection("BAĞLANTI XƏTASI");
   } finally {
     busy = false;
   }
 }
 
-/* =====================================
-   OTAĞA QOŞUL
-===================================== */
-
+/* OTAĞA QOŞUL */
 async function joinRoom() {
-  const name = cleanName($("nickname").value);
-  const code = $("roomCodeInput").value.trim().toUpperCase();
-
-  if (!name) {
-    setError("homeError", "Əvvəlcə oyunçu adını yaz.");
-    return;
-  }
-
-  if (!uid) {
-    setError("homeError", "Firebase girişini gözlə.");
-    return;
-  }
-
-  if (!/^[A-Z0-9]{4}$/.test(code)) {
-    setError("homeError", "4 simvollu otaq kodunu düzgün yaz.");
-    return;
-  }
-
-  setError("homeError", "");
+  if (busy) return;
   busy = true;
+  message("");
 
   try {
-    const rr = roomRef(code);
-    const snap = await get(rr);
+    await authReady;
 
-    if (!snap.exists()) {
-      throw new Error("Bu kodla otaq tapılmadı.");
-    }
+    const nickname = $("nickname").value.trim();
+    const code = $("roomCodeInput").value.trim().toUpperCase();
 
-    const data = snap.val();
-    const players = Object.keys(data.players || {});
-
-    if (data.state !== "lobby") {
-      throw new Error("Bu otaqda oyun artıq başlayıb.");
-    }
-
-    if (players.length >= 10) {
-      throw new Error("Otaq doludur (10/10).");
-    }
-
-    if (data.players?.[uid]) {
-      subscribeRoom(code);
+    if (!nickname) {
+      message("Oyunçu adını daxil et.");
       return;
     }
 
-    const character = CHARACTERS.find(character =>
-      !Object.values(data.players || {})
-        .some(player => player.character === character)
-    ) || CHARACTERS[0];
+    if (code.length !== 4) {
+      message("Otaq kodu 4 simvol olmalıdır.");
+      return;
+    }
 
-    await update(rr, {
-      [`players/${uid}`]: {
-        name,
-        character,
+    const roomRef = ref(db, "rooms/" + code);
+    const snapshot = await get(roomRef);
+
+    if (!snapshot.exists()) {
+      message("Belə otaq tapılmadı.");
+      return;
+    }
+
+    const room = snapshot.val();
+
+    if (room.status !== "lobby") {
+      message("Bu otaqda oyun artıq başlayıb.");
+      return;
+    }
+
+    const players = room.players || {};
+
+    if (Object.keys(players).length >= 10) {
+      message("Otaq doludur.");
+      return;
+    }
+
+    await update(roomRef, {
+      ["players/" + uid]: {
+        name: nickname,
+        character: CHARACTERS[0],
         alive: true,
         joinedAt: Date.now()
       }
     });
 
-    selectedTarget = null;
     subscribeRoom(code);
+    showScreen("lobby");
+    toast("Otağa qoşuldun!");
 
   } catch (error) {
-    setError("homeError", firebaseMessage(error));
+    console.error("Qoşulma xətası:", error);
+    message("Xəta: " + error.message);
   } finally {
     busy = false;
   }
 }
 
-/* =====================================
-   PERSONAJ DƏYİŞ
-===================================== */
+/* LOBBİ */
+function renderRoom() {
+  if (!roomData) return;
 
+  const players = Object.entries(roomData.players || {});
+  const isHost = roomData.host === uid;
+
+  $("roomCodeDisplay").textContent = currentRoom;
+  $("gameRoomCode").textContent = currentRoom;
+  $("playerCount").textContent = players.length + "/10";
+
+  $("playerList").innerHTML = players.map(([id, player]) => `
+    <div class="player-row">
+      <span>${escapeHTML(player.name)}</span>
+      <span>${id === roomData.host ? "HOST" : "OYUNÇU"}</span>
+    </div>
+  `).join("");
+
+  $("characterSelect").innerHTML = CHARACTERS.map(character =>
+    `<option value="${escapeHTML(character)}">${escapeHTML(character)}</option>`
+  ).join("");
+
+  const me = roomData.players?.[uid];
+
+  if (me) $("characterSelect").value = me.character;
+
+  $("startGame").style.display = isHost ? "block" : "none";
+  $("lobbyHint").textContent = isHost
+    ? "Dostların qoşulduqdan sonra oyunu başlada bilərsən."
+    : "Otaq sahibinin oyunu başlatmasını gözlə.";
+
+  if (roomData.status === "game") {
+    showScreen("game");
+    renderGame();
+  } else if (roomData.status === "ended") {
+    showScreen("ended");
+    renderEnd();
+  } else {
+    showScreen("lobby");
+  }
+}
+
+/* HTML TƏHLÜKƏSİZLİYİ */
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
+/* PERSONAJ SEÇİMİ */
 async function changeCharacter() {
-  if (!currentRoom || roomData?.state !== "lobby") return;
+  if (!currentRoom || !uid) return;
 
   const character = $("characterSelect").value;
 
@@ -604,290 +350,279 @@ async function changeCharacter() {
       { character }
     );
   } catch (error) {
-    toast(firebaseMessage(error));
+    console.error(error);
+    toast("Personaj dəyişdirilə bilmədi.");
   }
 }
 
-/* =====================================
-   OYUNU BAŞLAT
-===================================== */
-
+/* OYUNU BAŞLAT */
 async function startGame() {
-  if (!isHost() || busy) return;
+  if (!roomData || roomData.host !== uid) return;
 
-  busy = true;
+  const players = Object.keys(roomData.players || {});
+
+  if (players.length < 2) {
+    toast("Başlamaq üçün ən azı 2 oyunçu lazımdır.");
+    return;
+  }
 
   try {
-    const rr = roomRef(currentRoom);
-
-    const result = await runTransaction(rr, room => {
-      if (
-        !room ||
-        room.hostId !== uid ||
-        room.state !== "lobby"
-      ) return;
-
-      const ids = Object.keys(room.players || {});
-
-      if (ids.length < 2 || ids.length > 10) return;
-
-      ids.forEach(id => {
-        room.players[id].alive = true;
-      });
-
-      room.state = "playing";
-
-      room.game = {
-        chamber: 0,
-        bulletIndex: Math.floor(Math.random() * 6),
-        turnPlayerId: ids[0],
-        lastShot: null,
-        log: [
-          logEntry(
-            "OYUN BAŞLADI — İlk növbə " +
-            (room.players[ids[0]].character ||
-              room.players[ids[0]].name) +
-            " oyunçusundadır."
-          )
-        ]
-      };
-
-      return room;
+    await update(ref(db, "rooms/" + currentRoom), {
+      status: "game",
+      currentTurn: players[0],
+      round: 1,
+      events: {
+        0: "Oyun başladı."
+      }
     });
-
-    if (!result.committed) {
-      toast("Oyun başlana bilmədi. Minimum 2 oyunçu lazımdır.");
-    } else {
-      selectedTarget = null;
-    }
-
   } catch (error) {
-    toast(firebaseMessage(error));
-  } finally {
-    busy = false;
+    console.error(error);
+    toast("Oyun başlatmaq mümkün olmadı.");
   }
 }
 
-/* =====================================
-   NÖVBƏNİ KEÇ
-===================================== */
+/* NÖVBƏ */
+function alivePlayers() {
+  return Object.entries(roomData?.players || {})
+    .filter(([, player]) => player.alive);
+}
 
 function nextAliveId(players, currentId) {
-  const ids = Object.keys(players);
-  const start = ids.indexOf(currentId);
-
-  for (let step = 1; step <= ids.length; step++) {
-    const id = ids[(start + step) % ids.length];
-
-    if (players[id]?.alive !== false) {
-      return id;
-    }
-  }
-
-  return null;
+  const index = players.findIndex(([id]) => id === currentId);
+  return players[(index + 1) % players.length]?.[0];
 }
 
-/* =====================================
-   ATƏŞ
-===================================== */
+/* OYUN MASASI */
+function renderGame() {
+  if (!roomData) return;
 
+  const players = Object.entries(roomData.players || {});
+  const alive = alivePlayers();
+  const isMyTurn = roomData.currentTurn === uid;
+
+  $("aliveCount").textContent = alive.length + " OYUNÇU";
+  $("roundLabel").textContent = roomData.round || 1;
+
+  const currentPlayer = roomData.players?.[roomData.currentTurn];
+
+  $("turnLabel").textContent = isMyTurn
+    ? "SƏNİN NÖVBƏNDİR"
+    : currentPlayer
+      ? currentPlayer.name + " OYNAYIR"
+      : "NÖVBƏ GÖZLƏNİLİR";
+
+  const size = 33;
+  const center = 50;
+
+  $("seatList").innerHTML = players.map(([id, player], index) => {
+    const angle = (index / players.length) * Math.PI * 2 - Math.PI / 2;
+    const x = center + Math.cos(angle) * size;
+    const y = center + Math.sin(angle) * size;
+
+    return `
+      <div class="seat ${!player.alive ? "dead" : ""} ${id === roomData.currentTurn ? "current" : ""}"
+           style="left:${x}%;top:${y}%">
+        <div class="avatar">${player.alive ? "●" : "✕"}</div>
+        <span class="seat-name">${escapeHTML(player.name)}</span>
+        <span class="seat-char">${escapeHTML(player.character || "")}</span>
+      </div>
+    `;
+  }).join("") + `
+    <div class="table-gun">
+      <svg viewBox="0 0 200 100">
+        <path class="gun-barrel" d="M95 35 L190 35 L190 55 L95 55 Z"/>
+        <path class="gun-frame" d="M45 30 L105 30 L120 60 L100 72 L50 65 Z"/>
+        <circle class="gun-cylinder" cx="85" cy="48" r="22"/>
+        <circle class="gun-cylinder-hole" cx="85" cy="48" r="9"/>
+        <path class="gun-handle" d="M48 57 L80 65 L65 95 L40 85 Z"/>
+        <path class="gun-trigger" d="M110 60 Q125 75 112 80"/>
+        <circle class="gun-screw" cx="52" cy="42" r="3"/>
+      </svg>
+    </div>
+    <div class="shot-effect" id="shotEffect">
+      <div class="shot-burst"></div>
+      <div class="shot-word">BANG!</div>
+      <div class="shot-caption">MASA ARXASINDA</div>
+    </div>
+  `;
+
+  $("targetArea").innerHTML = alive.map(([id, player]) => `
+    <button class="target-btn ${selectedTarget === id ? "selected" : ""}"
+            data-target="${id}">
+      ${escapeHTML(player.name)}${id === uid ? " (SƏN)" : ""}
+    </button>
+  `).join("");
+
+  document.querySelectorAll("[data-target]").forEach(button => {
+    button.addEventListener("click", () => {
+      selectedTarget = button.dataset.target;
+      renderGame();
+    });
+  });
+
+  $("shootButton").disabled = !isMyTurn || !selectedTarget;
+  $("shootButton").textContent = isMyTurn
+    ? "HƏDƏFİ TƏSDİQLƏ VƏ ATƏŞ AÇ"
+    : "NÖVBƏNİ GÖZLƏ";
+
+  $("actionTitle").textContent = isMyTurn
+    ? "HƏDƏFİNİ SEÇ"
+    : "NÖVBƏ GÖZLƏNİLİR";
+
+  $("actionDescription").textContent = isMyTurn
+    ? "Masanın arxasında qərar sənindir."
+    : "Digər oyunçunun hərəkətini gözlə.";
+
+  $("eventLog").innerHTML = Object.values(roomData.events || {})
+    .slice(-8)
+    .reverse()
+    .map(event => `<div class="log-entry">${escapeHTML(event)}</div>`)
+    .join("");
+
+  if (roomData.lastShot?.id && roomData.lastShot.id !== lastEffectId) {
+    lastEffectId = roomData.lastShot.id;
+    const effect = $("shotEffect");
+    if (effect) {
+      effect.classList.add("play");
+    }
+  }
+}
+
+let selectedTarget = null;
+
+/* ATƏŞ */
 async function shoot() {
-  if (!selectedTarget || busy || !currentTurn()) return;
-
-  const targetId = selectedTarget;
-  const shooterId = uid;
+  if (busy || !currentRoom || !selectedTarget) return;
 
   busy = true;
-  $("shootButton").disabled = true;
 
   try {
-    const rr = roomRef(currentRoom);
+    const roomRef = ref(db, "rooms/" + currentRoom);
 
-    const result = await runTransaction(rr, room => {
-      if (!room || room.state !== "playing") return;
-      if (room.game?.turnPlayerId !== shooterId) return;
+    await runTransaction(roomRef, room => {
+      if (!room || room.status !== "game") return;
 
-      const shooter = room.players?.[shooterId];
-      const target = room.players?.[targetId];
+      if (room.currentTurn !== uid) return;
 
-      if (!shooter || shooter.alive === false) return;
-      if (!target || target.alive === false) return;
+      const players = room.players || {};
+      const shooter = players[uid];
+      const target = players[selectedTarget];
 
-      const g = room.game;
-      const hit = g.chamber === g.bulletIndex;
+      if (!shooter?.alive || !target?.alive) return;
 
-      const targetName = target.character || target.name;
-      const shooterName = shooter.character || shooter.name;
+      const hit = Math.random() < 0.5;
 
       if (hit) {
         target.alive = false;
-
-        addLog(
-          room,
-          `${shooterName} atəş açdı. ${targetName} oyundan çıxdı.`
-        );
-      } else {
-        addLog(
-          room,
-          `${shooterName} atəş açdı. Güllə boş çıxdı.`
-        );
       }
 
-      g.lastShot = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      const alive = Object.entries(players)
+        .filter(([, player]) => player.alive);
+
+      const events = room.events || {};
+      events[Date.now()] = hit
+        ? shooter.name + " atəş açdı. " + target.name + " oyundan çıxdı."
+        : shooter.name + " atəş açdı. Güllə boş çıxdı!";
+
+      const shotId = Date.now() + "-" + Math.random();
+
+      room.lastShot = {
+        id: shotId,
         hit,
-        targetName,
-        shooterName,
-        targetId,
-        at: Date.now()
+        shooter: uid,
+        target: selectedTarget
       };
 
-      g.chamber = (g.chamber + 1) % 6;
+      room.events = events;
 
-      const remaining = Object.values(room.players)
-        .filter(player => player.alive !== false);
-
-      if (remaining.length <= 1) {
-        room.state = "ended";
-
-        const winner = remaining[0];
-
-        addLog(
-          room,
-          winner
-            ? `${winner.character || winner.name} QALİB GƏLDİ!`
-            : "OYUN HEÇ-HEÇƏ BİTDİ."
-        );
-
-        return room;
-      }
-
-      // Özünü hədəf alıb boş çıxarsa, növbə özündə qalır.
-      if (!hit && targetId === shooterId) {
-        g.turnPlayerId = shooterId;
-
-        addLog(
-          room,
-          `${shooterName} özünü hədəf aldı. Boş çıxdı — növbə onda qalır.`
-        );
-      } else {
-        g.turnPlayerId = nextAliveId(
-          room.players,
-          shooterId
-        );
+      if (alive.length <= 1) {
+        room.status = "ended";
+        room.winner = alive[0]?.[0] || null;
+      } else if (hit || selectedTarget !== uid) {
+        room.currentTurn = nextAliveId(alive, uid);
       }
 
       return room;
     });
-
-    if (!result.committed) {
-      toast("Atəş açıla bilmədi. Növbəni yoxla.");
-      return;
-    }
 
     selectedTarget = null;
 
   } catch (error) {
-    toast(firebaseMessage(error));
+    console.error(error);
+    toast("Atəş açmaq mümkün olmadı.");
   } finally {
     busy = false;
-
-    if (roomData?.state === "playing") {
-      renderGame();
-    }
   }
 }
 
-/* =====================================
-   OTAQDAN ÇIX
-===================================== */
+/* OYUN SONU */
+function renderEnd() {
+  const winner = roomData.players?.[roomData.winner];
 
-async function leaveRoom(ask = true) {
-  if (!currentRoom) return;
+  $("winnerTitle").textContent = winner?.name || "HEÇ KİM";
+  $("winnerText").textContent = winner
+    ? winner.character + " masanın sonuncu sahibi oldu."
+    : "Oyun başa çatdı.";
+}
 
-  const code = currentRoom;
-
-  if (ask && !confirm("Otaqdan çıxmaq istəyirsən?")) {
+/* OTAQDAN ÇIX */
+async function leaveRoom() {
+  if (!currentRoom || !uid) {
+    showScreen("home");
     return;
   }
 
-  if (roomUnsub) {
-    roomUnsub();
-    roomUnsub = null;
-  }
-
   try {
-    const rr = roomRef(code);
+    const roomRef = ref(db, "rooms/" + currentRoom);
+    const snapshot = await get(roomRef);
 
-    if (roomData?.state === "lobby") {
-      if (isHost()) {
-        await set(rr, null);
+    if (snapshot.exists()) {
+      const room = snapshot.val();
+
+      if (room.host === uid) {
+        await remove(roomRef);
       } else {
-        await set(
-          ref(db, `rooms/${code}/players/${uid}`),
-          null
-        );
+        await remove(ref(db, `rooms/${currentRoom}/players/${uid}`));
       }
-
-    } else if (
-      roomData?.state === "playing" &&
-      me()?.alive !== false
-    ) {
-      await runTransaction(rr, room => {
-        if (
-          !room ||
-          room.state !== "playing" ||
-          !room.players?.[uid]
-        ) return;
-
-        room.players[uid].alive = false;
-
-        addLog(
-          room,
-          `${room.players[uid].name} otaqdan çıxdı və oyundan kənarlaşdırıldı.`
-        );
-
-        const remaining = Object.values(room.players)
-          .filter(player => player.alive !== false);
-
-        if (remaining.length <= 1) {
-          room.state = "ended";
-        } else if (room.game.turnPlayerId === uid) {
-          room.game.turnPlayerId =
-            nextAliveId(room.players, uid);
-        }
-
-        return room;
-      });
     }
-
   } catch (error) {
-    console.warn(error);
+    console.error(error);
   }
 
+  if (roomUnsub) roomUnsub();
+
+  roomUnsub = null;
   currentRoom = null;
   roomData = null;
   selectedTarget = null;
-  lastEffectId = null;
-  roomSnapshotInitialized = false;
 
   showScreen("home");
 }
 
-/* =====================================
-   DÜYMƏLƏR
-===================================== */
+/* KODU KOPYALA */
+async function copyRoomCode() {
+  if (!currentRoom) return;
 
+  try {
+    await navigator.clipboard.writeText(currentRoom);
+    toast("Otaq kodu kopyalandı!");
+  } catch {
+    toast("Kod: " + currentRoom);
+  }
+}
+
+/* DÜYMƏLƏR */
 $("createRoom").addEventListener("click", createRoom);
 $("joinRoom").addEventListener("click", joinRoom);
-
-$("characterSelect").innerHTML = CHARACTERS.map(character =>
-  `<option>${escapeHtml(character)}</option>`
-).join("");
-
+$("startGame").addEventListener("click", startGame);
 $("characterSelect").addEventListener("change", changeCharacter);
+$("shootButton").addEventListener("click", shoot);
+$("leaveLobby").addEventListener("click", leaveRoom);
+$("leaveGame").addEventListener("click", leaveRoom);
+$("backHome").addEventListener("click", leaveRoom);
+$("copyCode").addEventListener("click", copyRoomCode);
 
-$("startGame").addEventListener("click",
-document.getElementById("createRoom")?.addEventListener("click", () => {
-  alert("DÜYMƏ İŞLƏYİR!");
-});
+/* BAŞLANĞIC */
+showScreen("home");
+setConnection("BAĞLANTI GÖZLƏNİLİR");
+  
