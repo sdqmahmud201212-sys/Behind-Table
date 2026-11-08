@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="az">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#090909">
+  <title>MASA ARXASINDA</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="grain"></div>
+  <header class="topbar">
+    <div class="brand"><span class="lamp-dot"></span><span>MASA ARXASINDA</span></div>
+    <div id="connection" class="connection">BAĞLANTI YOXLANIR...</div>
+  </header>
+
+  <main>
+    <section id="home" class="screen active">
+      <div class="hero">
+        <div class="eyebrow">QARANLIQ OTAQ • MULTIPLAYER</div>
+        <h1>MASA<br><em>ARXASINDA</em></h1>
+        <p class="subtitle">Etibar azdır. Güllə birdir. Sonuncu qalan qalibdir.</p>
+        <div class="panel home-panel">
+          <label for="nickname">OYUNÇU ADI</label>
+          <input id="nickname" maxlength="18" placeholder="Adını yaz..." autocomplete="nickname">
+          <button id="createRoom" class="btn primary">OTAQ YARAT</button>
+          <div class="split"><span></span><small>VƏ YA</small><span></span></div>
+          <label for="roomCodeInput">OTAQ KODU</label>
+          <input id="roomCodeInput" maxlength="4" placeholder="MƏS: A7K2" autocapitalize="characters">
+          <button id="joinRoom" class="btn secondary">OTAĞA QOŞUL</button>
+          <p id="homeError" class="error"></p>
+        </div>
+      </div>
+      <footer>2–10 OYUNÇU <b>•</b> DOSTLARINLA OYNA</footer>
+    </section>
+
+    <section id="lobby" class="screen">
+      <div class="section-head">
+        <div><div class="eyebrow">OYUN OTAĞI</div><h2>GÖZLƏYİRİK</h2></div>
+        <button id="leaveLobby" class="btn tiny">ÇIX</button>
+      </div>
+      <div class="panel code-panel">
+        <small>OTAQ KODU</small>
+        <div class="code-line"><strong id="roomCodeDisplay">----</strong><button id="copyCode" class="btn tiny">KOPYALA</button></div>
+        <p>Dostlarına bu kodu göndər.</p>
+      </div>
+      <div class="panel">
+        <div class="panel-title"><span>OYUNÇULAR</span><span id="playerCount">0/10</span></div>
+        <div id="playerList" class="player-list"></div>
+      </div>
+      <div class="panel">
+        <label for="characterSelect">PERSONAJINI SEÇ</label>
+        <select id="characterSelect"></select>
+      </div>
+      <button id="startGame" class="btn primary">OYUNU BAŞLAT</button>
+      <p id="lobbyHint" class="hint">Oyunun başlaması üçün ən azı 2 oyunçu lazımdır.</p>
+      <p id="lobbyError" class="error"></p>
+    </section>
+
+    <section id="game" class="screen">
+      <div class="game-head">
+        <div><div class="eyebrow">OTAQ <span id="gameRoomCode"></span></div><h2>SONUNCU QALAN</h2></div>
+        <button id="leaveGame" class="btn tiny">ÇIX</button>
+      </div>
+      <div class="status-strip">
+        <span id="roundLabel">GÜLLƏLİ FİLDƏ 1/6</span>
+        <span id="aliveCount">0 OYUNÇU</span>
+      </div>
+      <div class="table-scene">
+        <div class="lamp"><span></span></div>
+        <div class="table-ring"><div class="table-center"><div class="table-title">MASA<br>ARXASINDA</div><div id="turnLabel" class="turn-label">NÖVBƏ GÖZLƏNİLİR</div></div></div>
+        <div id="seatList" class="seat-list"></div>
+      </div>
+      <div class="panel action-panel">
+        <div id="actionTitle" class="panel-title">NÖVBƏ GÖZLƏNİLİR</div>
+        <p id="actionDescription" class="hint">Oyunçuların hərəkəti gözlənilir.</p>
+        <div id="targetArea" class="target-area"></div>
+        <button id="shootButton" class="btn danger" disabled>HƏDƏFİ TƏSDİQLƏ VƏ ATƏŞ AÇ</button>
+        <div id="shotResult" class="shot-result" aria-live="polite"></div>
+      </div>
+      <div class="panel log-panel"><div class="panel-title">HADİSƏLƏR</div><div id="eventLog" class="event-log"></div></div>
+    </section>
+
+    <section id="ended" class="screen">
+      <div class="end-mark">●</div>
+      <div class="eyebrow">OYUN BİTDİ</div>
+      <h2 id="winnerTitle">QALİB</h2>
+      <p id="winnerText" class="subtitle"></p>
+      <button id="backHome" class="btn primary">ƏSAS MENYUYA QAYIT</button>
+    </section>
+  </main>
+  <div id="toast" class="toast"></div>
+  <script type="module" src="./game.js"></script>
+</body>
+</html>
