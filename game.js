@@ -1,6 +1,23 @@
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
-import { getDatabase, ref, get, set, update, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+import {
+  getAuth,
+  signInAnonymously,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+import {
+  getDatabase,
+  ref,
+  get,
+  set,
+  update,
+  onValue,
+  runTransaction
+} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+
+/* =====================================
+   FIREBASE
+===================================== */
 
 const firebaseConfig = {
   apiKey: "AIzaSyBFFigbO3r5vZbl7vfgzVboChHjXn2h-A",
@@ -18,9 +35,16 @@ const auth = getAuth(app);
 const db = getDatabase(app, "https://behind-table-default-rtdb.firebaseio.com");
 
 const CHARACTERS = [
-  "Moto moto", "Polat Amımdar", "Lez Ziya", "Məməşbaş",
-  "Əmdüley", "Maygülü", "Siksoran", "Tötəş",
-  "Əmir", "Çuban Ələddin"
+  "Moto moto",
+  "Polat Amımdar",
+  "Lez Ziya",
+  "Məməşbaş",
+  "Əmdüley",
+  "Maygülü",
+  "Siksoran",
+  "Tötəş",
+  "Əmir",
+  "Çuban Ələddin"
 ];
 
 const $ = id => document.getElementById(id);
@@ -32,11 +56,19 @@ let roomData = null;
 let selectedTarget = null;
 let busy = false;
 let lastEffectId = null;
+let roomSnapshotInitialized = false;
 
 const screens = ["home", "lobby", "game", "ended"];
 
+/* =====================================
+   ÜMUMİ FUNKSİYALAR
+===================================== */
+
 function showScreen(name) {
-  screens.forEach(id => $(id).classList.toggle("active", id === name));
+  screens.forEach(id => {
+    $(id).classList.toggle("active", id === name);
+  });
+
   window.scrollTo(0, 0);
 }
 
@@ -44,16 +76,22 @@ function toast(message) {
   const el = $("toast");
   el.textContent = message;
   el.classList.add("show");
+
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => el.classList.remove("show"), 2600);
+
+  toast.timer = setTimeout(() => {
+    el.classList.remove("show");
+  }, 2600);
 }
 
-function setError(id, msg) {
-  $(id).textContent = msg || "";
+function setError(id, message) {
+  $(id).textContent = message || "";
 }
 
 function cleanName(value) {
-  return value.trim().replace(/[.#$/\[\]]/g, "").slice(0, 18);
+  return value.trim()
+    .replace(/[.#$/\[\]]/g, "")
+    .slice(0, 18);
 }
 
 function code4() {
@@ -69,7 +107,8 @@ function me() {
 }
 
 function alivePlayers(data = roomData) {
-  return Object.values(data?.players || {}).filter(p => p.alive !== false);
+  return Object.values(data?.players || {})
+    .filter(player => player.alive !== false);
 }
 
 function isHost() {
@@ -81,7 +120,10 @@ function currentTurn() {
 }
 
 function logEntry(text) {
-  return { text, at: Date.now() };
+  return {
+    text,
+    at: Date.now()
+  };
 }
 
 function addLog(state, text) {
@@ -93,10 +135,48 @@ function addLog(state, text) {
   }
 }
 
+function escapeHtml(str = "") {
+  return String(str).replace(/[&<>"']/g, ch => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[ch]));
+}
+
+function firebaseMessage(error) {
+  const code = error?.code || "";
+
+  if (code.includes("permission-denied")) {
+    return "Firebase icazə vermədi. Database Rules bölməsini yoxla.";
+  }
+
+  if (code.includes("unauthorized-domain")) {
+    return "GitHub Pages domenini Firebase Authorized domains bölməsinə əlavə et.";
+  }
+
+  if (code.includes("network")) {
+    return "İnternet bağlantısını yoxla.";
+  }
+
+  if (code.includes("auth/operation-not-allowed")) {
+    return "Anonymous Authentication aktiv deyil.";
+  }
+
+  return error?.message || "Naməlum xəta baş verdi.";
+}
+
+/* =====================================
+   OTAQ SİNXRONİZASİYASI
+===================================== */
+
 function subscribeRoom(code) {
   if (roomUnsub) roomUnsub();
 
   currentRoom = code;
+  roomSnapshotInitialized = false;
+  lastEffectId = null;
 
   roomUnsub = onValue(roomRef(code), snap => {
     if (!snap.exists()) {
@@ -105,11 +185,25 @@ function subscribeRoom(code) {
       return;
     }
 
-    roomData = snap.val();
+    const nextData = snap.val();
+
+    // İlk yükləmədə köhnə atəş animasiyasını oynatma.
+    if (!roomSnapshotInitialized) {
+      lastEffectId = nextData?.game?.lastShot?.id ?? null;
+      roomSnapshotInitialized = true;
+    }
+
+    roomData = nextData;
     renderRoom();
 
-  }, err => toast("Otaq oxunmadı: " + err.message));
+  }, error => {
+    toast("Otaq oxunmadı: " + error.message);
+  });
 }
+
+/* =====================================
+   LOBBİ
+===================================== */
 
 function renderRoom() {
   if (!roomData) return;
@@ -123,27 +217,34 @@ function renderRoom() {
 
   $("playerCount").textContent = `${players.length}/10`;
 
-  $("playerList").innerHTML = players.map(([id, p]) => `
+  $("playerList").innerHTML = players.map(([id, player]) => `
     <div class="player-row">
       <span>
-        ${escapeHtml(p.name)}
-        ${id === uid ? '<b class="you"> (SƏN)</b>' : ''}
+        ${escapeHtml(player.name)}
+        ${id === uid ? '<b class="you"> (SƏN)</b>' : ""}
       </span>
+
       <span class="role">
-        ${id === roomData.hostId ? "HOST" : escapeHtml(p.character || "")}
+        ${id === roomData.hostId
+          ? "HOST"
+          : escapeHtml(player.character || "")}
       </span>
     </div>
   `).join("");
 
-  $("characterSelect").value = me()?.character || CHARACTERS[0];
+  $("characterSelect").value =
+    me()?.character || CHARACTERS[0];
 
-  $("startGame").style.display = isHost() ? "block" : "none";
+  $("startGame").style.display =
+    isHost() ? "block" : "none";
 
   $("lobbyHint").textContent = isHost()
     ? "Hazır olan dostlarınla oyuna başla. Minimum 2, maksimum 10 oyunçu."
     : "Host oyunu başladana qədər gözlə.";
 
-  if (state === "lobby") showScreen("lobby");
+  if (state === "lobby") {
+    showScreen("lobby");
+  }
 
   if (state === "playing") {
     showScreen("game");
@@ -155,6 +256,10 @@ function renderRoom() {
     renderEnd();
   }
 }
+
+/* =====================================
+   OYUN EKRANI
+===================================== */
 
 function renderGame() {
   if (!roomData?.game) return;
@@ -173,52 +278,62 @@ function renderGame() {
 
   const all = Object.entries(roomData.players || {});
 
-  // Oyunçuları dairəvi masanın ətrafında yerləşdiririk.
+  // Personajların dairəvi yerləşməsi.
   const centerX = 50;
   const centerY = 50;
-  const rx = 36;
-  const ry = 36;
+  const rx = 33;
+  const ry = 33;
 
-  const seats = all.map(([id, p], i) => {
-    const angle = (-Math.PI / 2) + (2 * Math.PI * i / Math.max(all.length, 1));
+  const seats = all.map(([id, player], index) => {
+    const angle =
+      (-Math.PI / 2) +
+      (2 * Math.PI * index / Math.max(all.length, 1));
 
     const x = centerX + rx * Math.cos(angle);
     const y = centerY + ry * Math.sin(angle);
 
-    const character = p.character || p.name;
+    const character = player.character || player.name;
 
     return `
-      <div class="seat ${p.alive === false ? "dead" : ""} ${id === g.turnPlayerId ? "current" : ""}"
-           style="left:${x}%;top:${y}%">
+      <div
+        class="seat ${player.alive === false ? "dead" : ""} ${id === g.turnPlayerId ? "current" : ""}"
+        style="left:${x}%;top:${y}%"
+      >
+        <div class="avatar">
+          ${escapeHtml(character.slice(0, 1).toUpperCase())}
+        </div>
 
-        <div class="avatar">${escapeHtml(character.slice(0, 1).toUpperCase())}</div>
+        <div class="seat-name">
+          ${escapeHtml(character)}
+        </div>
 
-        <div class="seat-name">${escapeHtml(character)}</div>
-
-        <div class="seat-char">${escapeHtml(p.name)}</div>
-
+        <div class="seat-char">
+          ${escapeHtml(player.name)}
+        </div>
       </div>
     `;
   }).join("");
 
-  // Atəş effekti.
   const shot = g.lastShot;
 
+  // Retro atəş animasiyası.
   const effect = shot ? `
     <div class="shot-effect ${shot.hit ? "hit" : "empty"}">
       <div class="shot-burst"></div>
-      <div class="shot-word">${shot.hit ? "BANG!" : "CLICK!"}</div>
+
+      <div class="shot-word">
+        ${shot.hit ? "BANG!" : "CLICK!"}
+      </div>
+
       <div class="shot-caption">
         ${shot.hit ? "GÜLLƏ DƏYDİ" : "BOŞ ÇIXDI"}
       </div>
     </div>
   ` : "";
 
-  // Revolver və oyunçular eyni mərkəzli dairədə yerləşir.
   $("seatList").innerHTML = seats + `
     <div class="table-gun">
       <svg viewBox="0 0 180 90" aria-hidden="true">
-
         <path class="gun-barrel"
           d="M88 30 L164 30 L164 48 L88 48 Z"/>
 
@@ -242,24 +357,26 @@ function renderGame() {
 
         <circle class="gun-screw"
           cx="48" cy="40" r="3"/>
-
       </svg>
     </div>
+
     ${effect}
   `;
 
-  // Yeni atəş baş veribsə, animasiyanı başladırıq.
+  // Yalnız yeni atəşdə animasiya oynayır.
   if (shot && String(shot.id) !== String(lastEffectId)) {
     lastEffectId = shot.id;
 
-    const effectElement = $("seatList").querySelector(".shot-effect");
+    const effectElement =
+      $("seatList").querySelector(".shot-effect");
 
     if (effectElement) {
       effectElement.classList.add("play");
     }
   }
 
-  const canAct = currentTurn() && me()?.alive !== false;
+  const canAct =
+    currentTurn() && me()?.alive !== false;
 
   $("actionTitle").textContent = canAct
     ? "SƏNİN NÖVBƏNDİR"
@@ -272,30 +389,36 @@ function renderGame() {
       : "Oyun davam edir.";
 
   const targets = Object.entries(roomData.players || {})
-    .filter(([id, p]) => id !== uid && p.alive !== false);
+    .filter(([id, player]) =>
+      id !== uid && player.alive !== false
+    );
 
-  const options = canAct ? [...targets, [uid, me()]] : [];
+  const options = canAct
+    ? [...targets, [uid, me()]]
+    : [];
 
-  $("targetArea").innerHTML = options.map(([id, p]) => `
-    <button class="target-option ${selectedTarget === id ? "selected" : ""}"
-            data-target="${id}">
-
-      ${escapeHtml(p.character || p.name)}
+  $("targetArea").innerHTML = options.map(([id, player]) => `
+    <button
+      class="target-option ${selectedTarget === id ? "selected" : ""}"
+      data-target="${id}"
+    >
+      ${escapeHtml(player.character || player.name)}
       ${id === uid ? " (ÖZÜN)" : ""}
-
-      <small>${escapeHtml(p.name)}</small>
-
+      <small>${escapeHtml(player.name)}</small>
     </button>
   `).join("");
 
-  $("targetArea").querySelectorAll("[data-target]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      selectedTarget = btn.dataset.target;
-      renderGame();
+  $("targetArea")
+    .querySelectorAll("[data-target]")
+    .forEach(button => {
+      button.addEventListener("click", () => {
+        selectedTarget = button.dataset.target;
+        renderGame();
+      });
     });
-  });
 
-  $("shootButton").disabled = !canAct || !selectedTarget || busy;
+  $("shootButton").disabled =
+    !canAct || !selectedTarget || busy;
 
   $("shootButton").textContent = busy
     ? "GÖZLƏ..."
@@ -312,12 +435,16 @@ function renderGame() {
   `).join("");
 }
 
+/* =====================================
+   QALİB EKRANI
+===================================== */
+
 function renderEnd() {
   const alive = alivePlayers();
   const winner = alive[0];
 
   $("winnerTitle").textContent = winner
-    ? escapeHtml(winner.character || winner.name)
+    ? (winner.character || winner.name)
     : "HEÇ KİM";
 
   $("winnerText").textContent = winner
@@ -325,15 +452,9 @@ function renderEnd() {
     : "Bu oyunda qalib olmadı.";
 }
 
-function escapeHtml(str = "") {
-  return String(str).replace(/[&<>"']/g, ch => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  }[ch]));
-}
+/* =====================================
+   OTAQ YARAT
+===================================== */
 
 async function createRoom() {
   const name = cleanName($("nickname").value);
@@ -344,7 +465,7 @@ async function createRoom() {
   }
 
   if (!uid) {
-    setError("homeError", "Firebase girişini gözlə, sonra yenidən yoxla.");
+    setError("homeError", "Firebase girişini gözlə.");
     return;
   }
 
@@ -352,21 +473,24 @@ async function createRoom() {
   busy = true;
 
   try {
-    let code, exists = true;
+    let code;
+    let exists = true;
 
     for (let i = 0; i < 8 && exists; i++) {
       code = code4();
-      const s = await get(roomRef(code));
-      exists = s.exists();
+      const snap = await get(roomRef(code));
+      exists = snap.exists();
     }
 
     if (exists) {
-      throw new Error("Unikal otaq kodu yaradıla bilmədi. Yenidən yoxla.");
+      throw new Error("Unikal otaq kodu yaradıla bilmədi.");
     }
 
     const player = {
       name,
-      character: CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)],
+      character: CHARACTERS[
+        Math.floor(Math.random() * CHARACTERS.length)
+      ],
       alive: true,
       joinedAt: Date.now()
     };
@@ -375,17 +499,24 @@ async function createRoom() {
       hostId: uid,
       state: "lobby",
       createdAt: Date.now(),
-      players: { [uid]: player }
+      players: {
+        [uid]: player
+      }
     });
 
+    selectedTarget = null;
     subscribeRoom(code);
 
-  } catch (e) {
-    setError("homeError", firebaseMessage(e));
+  } catch (error) {
+    setError("homeError", firebaseMessage(error));
   } finally {
     busy = false;
   }
 }
+
+/* =====================================
+   OTAĞA QOŞUL
+===================================== */
 
 async function joinRoom() {
   const name = cleanName($("nickname").value);
@@ -397,7 +528,7 @@ async function joinRoom() {
   }
 
   if (!uid) {
-    setError("homeError", "Firebase girişini gözlə, sonra yenidən yoxla.");
+    setError("homeError", "Firebase girişini gözlə.");
     return;
   }
 
@@ -433,8 +564,9 @@ async function joinRoom() {
       return;
     }
 
-    const character = CHARACTERS.find(c =>
-      !Object.values(data.players || {}).some(p => p.character === c)
+    const character = CHARACTERS.find(character =>
+      !Object.values(data.players || {})
+        .some(player => player.character === character)
     ) || CHARACTERS[0];
 
     await update(rr, {
@@ -446,14 +578,19 @@ async function joinRoom() {
       }
     });
 
+    selectedTarget = null;
     subscribeRoom(code);
 
-  } catch (e) {
-    setError("homeError", firebaseMessage(e));
+  } catch (error) {
+    setError("homeError", firebaseMessage(error));
   } finally {
     busy = false;
   }
 }
+
+/* =====================================
+   PERSONAJ DƏYİŞ
+===================================== */
 
 async function changeCharacter() {
   if (!currentRoom || roomData?.state !== "lobby") return;
@@ -461,13 +598,18 @@ async function changeCharacter() {
   const character = $("characterSelect").value;
 
   try {
-    await update(ref(db, `rooms/${currentRoom}/players/${uid}`), {
-      character
-    });
-  } catch (e) {
-    toast(firebaseMessage(e));
+    await update(
+      ref(db, `rooms/${currentRoom}/players/${uid}`),
+      { character }
+    );
+  } catch (error) {
+    toast(firebaseMessage(error));
   }
 }
+
+/* =====================================
+   OYUNU BAŞLAT
+===================================== */
 
 async function startGame() {
   if (!isHost() || busy) return;
@@ -478,13 +620,19 @@ async function startGame() {
     const rr = roomRef(currentRoom);
 
     const result = await runTransaction(rr, room => {
-      if (!room || room.hostId !== uid || room.state !== "lobby") return;
+      if (
+        !room ||
+        room.hostId !== uid ||
+        room.state !== "lobby"
+      ) return;
 
       const ids = Object.keys(room.players || {});
 
       if (ids.length < 2 || ids.length > 10) return;
 
-      ids.forEach(id => room.players[id].alive = true);
+      ids.forEach(id => {
+        room.players[id].alive = true;
+      });
 
       room.state = "playing";
 
@@ -495,8 +643,9 @@ async function startGame() {
         lastShot: null,
         log: [
           logEntry(
-            "Oyun başladı. İlk növbə " +
-            (room.players[ids[0]].character || room.players[ids[0]].name) +
+            "OYUN BAŞLADI — İlk növbə " +
+            (room.players[ids[0]].character ||
+              room.players[ids[0]].name) +
             " oyunçusundadır."
           )
         ]
@@ -506,15 +655,21 @@ async function startGame() {
     });
 
     if (!result.committed) {
-      toast("Oyun başlana bilmədi. Ən azı 2 oyunçu olmalıdır.");
+      toast("Oyun başlana bilmədi. Minimum 2 oyunçu lazımdır.");
+    } else {
+      selectedTarget = null;
     }
 
-  } catch (e) {
-    toast(firebaseMessage(e));
+  } catch (error) {
+    toast(firebaseMessage(error));
   } finally {
     busy = false;
   }
 }
+
+/* =====================================
+   NÖVBƏNİ KEÇ
+===================================== */
 
 function nextAliveId(players, currentId) {
   const ids = Object.keys(players);
@@ -523,11 +678,17 @@ function nextAliveId(players, currentId) {
   for (let step = 1; step <= ids.length; step++) {
     const id = ids[(start + step) % ids.length];
 
-    if (players[id]?.alive !== false) return id;
+    if (players[id]?.alive !== false) {
+      return id;
+    }
   }
 
   return null;
 }
+
+/* =====================================
+   ATƏŞ
+===================================== */
 
 async function shoot() {
   if (!selectedTarget || busy || !currentTurn()) return;
@@ -543,7 +704,6 @@ async function shoot() {
 
     const result = await runTransaction(rr, room => {
       if (!room || room.state !== "playing") return;
-
       if (room.game?.turnPlayerId !== shooterId) return;
 
       const shooter = room.players?.[shooterId];
@@ -565,7 +725,6 @@ async function shoot() {
           room,
           `${shooterName} atəş açdı. ${targetName} oyundan çıxdı.`
         );
-
       } else {
         addLog(
           room,
@@ -573,9 +732,8 @@ async function shoot() {
         );
       }
 
-      // Atəş nəticəsini bütün oyunçulara ötürürük.
       g.lastShot = {
-        id: Date.now() + "-" + Math.random().toString(36).slice(2, 7),
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         hit,
         targetName,
         shooterName,
@@ -585,16 +743,19 @@ async function shoot() {
 
       g.chamber = (g.chamber + 1) % 6;
 
-      if (alivePlayers(room).length <= 1) {
+      const remaining = Object.values(room.players)
+        .filter(player => player.alive !== false);
+
+      if (remaining.length <= 1) {
         room.state = "ended";
 
-        const winner = alivePlayers(room)[0];
+        const winner = remaining[0];
 
         addLog(
           room,
           winner
-            ? `${winner.character || winner.name} qalib gəldi.`
-            : "Oyun heç-heçə bitdi."
+            ? `${winner.character || winner.name} QALİB GƏLDİ!`
+            : "OYUN HEÇ-HEÇƏ BİTDİ."
         );
 
         return room;
@@ -606,11 +767,13 @@ async function shoot() {
 
         addLog(
           room,
-          `${shooterName} özünü hədəf aldı, amma boş çıxdı. Növbə onda qalır.`
+          `${shooterName} özünü hədəf aldı. Boş çıxdı — növbə onda qalır.`
         );
-
       } else {
-        g.turnPlayerId = nextAliveId(room.players, shooterId);
+        g.turnPlayerId = nextAliveId(
+          room.players,
+          shooterId
+        );
       }
 
       return room;
@@ -623,9 +786,8 @@ async function shoot() {
 
     selectedTarget = null;
 
-  } catch (e) {
-    toast(firebaseMessage(e));
-
+  } catch (error) {
+    toast(firebaseMessage(error));
   } finally {
     busy = false;
 
@@ -635,12 +797,18 @@ async function shoot() {
   }
 }
 
+/* =====================================
+   OTAQDAN ÇIX
+===================================== */
+
 async function leaveRoom(ask = true) {
   if (!currentRoom) return;
 
   const code = currentRoom;
 
-  if (ask && !confirm("Otaqdan çıxmaq istəyirsən?")) return;
+  if (ask && !confirm("Otaqdan çıxmaq istəyirsən?")) {
+    return;
+  }
 
   if (roomUnsub) {
     roomUnsub();
@@ -654,13 +822,22 @@ async function leaveRoom(ask = true) {
       if (isHost()) {
         await set(rr, null);
       } else {
-        await set(ref(db, `rooms/${code}/players/${uid}`), null);
+        await set(
+          ref(db, `rooms/${code}/players/${uid}`),
+          null
+        );
       }
 
-    } else if (roomData?.state === "playing" && me()?.alive !== false) {
-
+    } else if (
+      roomData?.state === "playing" &&
+      me()?.alive !== false
+    ) {
       await runTransaction(rr, room => {
-        if (!room || room.state !== "playing" || !room.players?.[uid]) return;
+        if (
+          !room ||
+          room.state !== "playing" ||
+          !room.players?.[uid]
+        ) return;
 
         room.players[uid].alive = false;
 
@@ -669,103 +846,44 @@ async function leaveRoom(ask = true) {
           `${room.players[uid].name} otaqdan çıxdı və oyundan kənarlaşdırıldı.`
         );
 
-        if (alivePlayers(room).length <= 1) {
+        const remaining = Object.values(room.players)
+          .filter(player => player.alive !== false);
+
+        if (remaining.length <= 1) {
           room.state = "ended";
         } else if (room.game.turnPlayerId === uid) {
-          room.game.turnPlayerId = nextAliveId(room.players, uid);
+          room.game.turnPlayerId =
+            nextAliveId(room.players, uid);
         }
 
         return room;
       });
     }
 
-  } catch (e) {
-    console.warn(e);
+  } catch (error) {
+    console.warn(error);
   }
 
   currentRoom = null;
   roomData = null;
   selectedTarget = null;
   lastEffectId = null;
+  roomSnapshotInitialized = false;
 
   showScreen("home");
 }
 
-function firebaseMessage(e) {
-  const code = e?.code || "";
+/* =====================================
+   DÜYMƏLƏR
+===================================== */
 
-  if (code.includes("permission-denied")) {
-    return "Firebase icazə vermədi. Realtime Database Rules bölməsini yoxla.";
-  }
-
-  if (code.includes("unauthorized-domain")) {
-    return "GitHub Pages domeni Firebase Authentication → Authorized domains bölməsinə əlavə edilməlidir.";
-  }
-
-  if (code.includes("network")) {
-    return "İnternet bağlantısını yoxla.";
-  }
-
-  if (code.includes("auth/operation-not-allowed")) {
-    return "Firebase-də Anonymous Authentication aktiv deyil.";
-  }
-
-  return e?.message || "Naməlum xəta baş verdi.";
-}
-
-// Düymələr
 $("createRoom").addEventListener("click", createRoom);
 $("joinRoom").addEventListener("click", joinRoom);
 
-$("characterSelect").innerHTML = CHARACTERS.map(c =>
-  `<option>${escapeHtml(c)}</option>`
+$("characterSelect").innerHTML = CHARACTERS.map(character =>
+  `<option>${escapeHtml(character)}</option>`
 ).join("");
 
 $("characterSelect").addEventListener("change", changeCharacter);
-$("startGame").addEventListener("click", startGame);
-$("shootButton").addEventListener("click", shoot);
 
-$("leaveLobby").addEventListener("click", () => leaveRoom());
-$("leaveGame").addEventListener("click", () => leaveRoom());
-
-$("copyCode").addEventListener("click", async () => {
-  try {
-    await navigator.clipboard.writeText(currentRoom);
-    toast("Otaq kodu kopyalandı.");
-  } catch {
-    toast("Otaq kodu: " + currentRoom);
-  }
-});
-
-$("backHome").addEventListener("click", () => {
-  currentRoom = null;
-  roomData = null;
-  selectedTarget = null;
-  lastEffectId = null;
-  showScreen("home");
-});
-
-$("roomCodeInput").addEventListener("input", e => {
-  e.target.value = e.target.value
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 4);
-});
-
-// Firebase bağlantısı
-$("connection").textContent = "FIREBASE-Ə QOŞULUR...";
-
-signInAnonymously(auth).catch(e => {
-  $("connection").textContent = "GİRİŞ XƏTASI";
-  setError("homeError", firebaseMessage(e));
-});
-
-onAuthStateChanged(auth, user => {
-  if (user) {
-    uid = user.uid;
-    $("connection").textContent = "ONLAYN • ANONİM GİRİŞ";
-  } else {
-    $("connection").textContent = "BAĞLANTI GÖZLƏNİLİR";
-    uid = null;
-  }
-});
+$("startGame").addEventListener("click",
