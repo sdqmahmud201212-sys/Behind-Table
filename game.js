@@ -19,8 +19,9 @@ import {
    FIREBASE
 ===================================== */
 
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyBFFigbO3r5vZbl7vfgzVboChHjXn2h-A",
+  apiKey: "AIzaSyBFFVigbO3r5vZbl7vfgzVboChHjXn2h-A",
   authDomain: "behind-table.firebaseapp.com",
   databaseURL: "https://behind-table-default-rtdb.firebaseio.com",
   projectId: "behind-table",
