@@ -15,7 +15,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getDatabase(app);
+const db = getDatabase(app, "https://behind-table-default-rtdb.firebaseio.com");;
 
 const CHARACTERS = ["Moto moto","Polat Amımdar","Lez Ziya","Məməşbaş","Əmdüley","Maygülü","Siksoran","Tötəş","Əmir","Çuban Ələddin"];
 const $ = id => document.getElementById(id);
