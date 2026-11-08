@@ -888,3 +888,6 @@ $("characterSelect").innerHTML = CHARACTERS.map(character =>
 $("characterSelect").addEventListener("change", changeCharacter);
 
 $("startGame").addEventListener("click",
+document.getElementById("createRoom")?.addEventListener("click", () => {
+  alert("DÜYMƏ İŞLƏYİR!");
+});
