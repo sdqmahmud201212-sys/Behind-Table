@@ -33,7 +33,7 @@ jobs:
           npm init -y
           npm install @capacitor/core@6 @capacitor/android@6
           npm install --save-dev @capacitor/cli@6
-          npx cap init "Masa Arxasinda" com.company.behindtable --web-dir=www
+          npx cap init "Masa Arxasında" com.company.behindtable --web-dir=www
           npx cap add android
           npx cap sync android
 
@@ -46,6 +46,6 @@ jobs:
       - name: Save APK
         uses: actions/upload-artifact@v4
         with:
-          name: Masa-Arxasinda-APK
+          name: Masa-Arxasında-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           
