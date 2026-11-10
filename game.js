@@ -1,11 +1,33 @@
+/* =========================================================
+   MASA ARXASINDA
+   GAME.JS — 1-Cİ HİSSƏ
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+   Bu hissə:
+   1. Firebase bağlantısı
+   2. Anonim istifadəçi girişi
+   3. Otaq yaratmaq və qoşulmaq
+   4. Oyunçu və personaj sistemi
+   5. Hazır olma sistemi
+   6. Raund və kart seçimi
+   7. Otaq məlumatlarının sinxronlaşdırılması
+
+   2-ci hissə bu faylın SONUNA əlavə ediləcək.
+========================================================= */
+
+
+/* =========================================================
+   1. FIREBASE IMPORTLARI
+========================================================= */
+
+import { initializeApp } from
+  "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
 
 import {
   getAuth,
   signInAnonymously,
   onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+} from
+  "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 
 import {
   getDatabase,
@@ -15,11 +37,16 @@ import {
   update,
   onValue,
   runTransaction,
-  remove
-} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+  remove,
+  onDisconnect
+} from
+  "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
 
-/* FIREBASE */
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+
+/* =========================================================
+   2. FIREBASE KONFİQURASİYASI
+========================================================= */
+
 const firebaseConfig = {
   apiKey: "AIzaSyBFFVigbO3r5vZbl7vfgzVboChHjXn2h-A",
   authDomain: "behind-table.firebaseapp.com",
@@ -33,596 +60,2446 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getDatabase(app, "https://behind-table-default-rtdb.firebaseio.com");
+const db = getDatabase(app);
 
-/* PERSONAJLAR */
-const CHARACTERS = [
-  "Moto moto",
-  "Polat Amımdar",
-  "Lez Ziya",
-  "Məməşbaş",
-  "Əmdüley",
-  "Maygülü",
-  "Siksoran",
-  "Tötəş",
-  "Əmir",
-  "Çuban Ələddin"
-];
 
-/* DƏYİŞƏNLƏR */
+/* =========================================================
+   3. ƏSAS DƏYİŞƏNLƏR
+========================================================= */
+
 let uid = null;
 let currentRoom = null;
 let roomData = null;
+
 let roomUnsub = null;
+let authReady = false;
 let busy = false;
+
+let selectedCards = [];
+let selectedTarget = null;
+
+let lastEventId = null;
 let lastEffectId = null;
 
-const $ = id => document.getElementById(id);
+let isPracticeMode = false;
+let practiceBots = [];
 
-/* EKRANLAR */
-function showScreen(id) {
-  document.querySelectorAll(".screen").forEach(screen => {
-    screen.classList.remove("active");
-  });
+let toastTimeout = null;
 
-  $(id)?.classList.add("active");
+const $ = (id) => document.getElementById(id);
+
+
+/* =========================================================
+   4. OYUNÇU PERSONAJLARI
+
+   Hər personajın öz siması var.
+   Siksoran adı Əməsgəri ilə əvəz edilib.
+========================================================= */
+
+const CHARACTERS = [
+  {
+    id: "moto",
+    name: "Moto moto",
+    face: "😎"
+  },
+  {
+    id: "polat",
+    name: "Polat Amımdar",
+    face: "🕶️"
+  },
+  {
+    id: "lez",
+    name: "Lez Ziya",
+    face: "🤠"
+  },
+  {
+    id: "memesbas",
+    name: "Məməşbaş",
+    face: "🤓"
+  },
+  {
+    id: "emdul",
+    name: "Əmdüley",
+    face: "🥸"
+  },
+  {
+    id: "maygulu",
+    name: "Maygülü",
+    face: "😈"
+  },
+  {
+    id: "emesgeri",
+    name: "Əməsgəri",
+    face: "👽"
+  },
+  {
+    id: "totes",
+    name: "Tötəş",
+    face: "🤡"
+  },
+  {
+    id: "amir",
+    name: "Əmir",
+    face: "🧐"
+  },
+  {
+    id: "chuban",
+    name: "Çuban Ələddin",
+    face: "🤖"
+  }
+];
+
+
+/* =========================================================
+   5. KART MƏLUMATLARI
+
+   Kartların mexanikaları 2-ci hissədə işləyəcək.
+   Burada onların seçilməsi və saxlanması qurulur.
+========================================================= */
+
+const CARD_DATA = {
+  detective: {
+    id: "detective",
+    name: "Detektiv",
+    icon: "🔎",
+    description: "Növbəti kamerada güllə olub-olmadığını öyrən.",
+    color: "#48c6ff"
+  },
+
+  swap: {
+    id: "swap",
+    name: "Yerdəyişmə",
+    icon: "🔄",
+    description: "Sənə atəş açıldıqda zərbəni hücumçuya yönəlt.",
+    color: "#54e39a"
+  },
+
+  counter: {
+    id: "counter",
+    name: "Əks təsir",
+    icon: "🛡️",
+    description: "Dolu güllə səni vurarsa, zərəri blokla və can qazan.",
+    color: "#8b5cf6"
+  },
+
+  witch: {
+    id: "witch",
+    name: "İfritəlik",
+    icon: "🧙",
+    description: "Seçilmiş hədəfə növbəti atəşin vurma şansı 80% olsun.",
+    color: "#ff5caa"
+  },
+
+  selfLove: {
+    id: "selfLove",
+    name: "Canını sevmək",
+    icon: "❤️",
+    description: "Özünə atəş açanda vurulma ehtimalını 1/4-ə endir.",
+    color: "#ff5364"
+  },
+
+  evil: {
+    id: "evil",
+    name: "İbnəlik",
+    icon: "☠️",
+    description: "Dolu güllə hədəfi dərhal öldürür; boş çıxarsa, özün 1 can itirirsən.",
+    color: "#ffd447"
+  }
+};
+
+
+/* =========================================================
+   6. RAUND QAYDALARI
+========================================================= */
+
+const ROUND_CONFIG = {
+  1: {
+    chambers: 6,
+    bullets: 2,
+    cards: 1,
+    selectionTime: 30,
+    automaticCards: false
+  },
+
+  2: {
+    chambers: 8,
+    bullets: 3,
+    cards: 2,
+    selectionTime: 30,
+    automaticCards: false
+  },
+
+  3: {
+    chambers: 9,
+    bullets: 4,
+    cards: 2,
+    selectionTime: 30,
+    automaticCards: false
+  },
+
+  4: {
+    chambers: 9,
+    bullets: 5,
+    cards: 3,
+    selectionTime: 30,
+    automaticCards: false
+  },
+
+  5: {
+    chambers: 12,
+    bullets: 7,
+    cards: 3,
+    selectionTime: 0,
+    automaticCards: true
+  }
+};
+
+
+/* =========================================================
+   7. ÜMUMİ KÖMƏKÇİ FUNKSİYALAR
+========================================================= */
+
+function randomId(length = 12) {
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+  let result = "";
+
+  for (let i = 0; i < length; i++) {
+    result += chars[
+      Math.floor(Math.random() * chars.length)
+    ];
+  }
+
+  return result;
 }
 
-function message(text) {
-  $("homeError").textContent = text;
-}
 
-function toast(text) {
-  const el = $("toast");
-  el.textContent = text;
-  el.classList.add("show");
-
-  setTimeout(() => el.classList.remove("show"), 2500);
-}
-
-function setConnection(text) {
-  $("connection").textContent = text;
-}
-
-/* AUTH */
-const authReady = new Promise((resolve, reject) => {
-  signInAnonymously(auth).catch(reject);
-
-  onAuthStateChanged(auth, user => {
-    if (user) {
-      uid = user.uid;
-      setConnection("BAĞLANTI QURULDU");
-      resolve(user);
-    }
-  });
-});
-
-authReady.catch(error => {
-  console.error("Firebase Auth:", error);
-  setConnection("BAĞLANTI XƏTASI");
-  message("Firebase bağlantısı qurulmadı: " + error.message);
-});
-
-/* KOD YARATMA */
-function generateCode() {
+function makeRoomCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
   let code = "";
 
   for (let i = 0; i < 4; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
+    code += chars[
+      Math.floor(Math.random() * chars.length)
+    ];
   }
 
   return code;
 }
 
-/* OTAĞA QULAQ ASMA */
-function subscribeRoom(code) {
-  if (roomUnsub) roomUnsub();
 
-  currentRoom = code;
-  lastEffectId = null;
+function randomItem(array) {
+  return array[Math.floor(Math.random() * array.length)];
+}
 
-  const roomRef = ref(db, "rooms/" + code);
 
-  roomUnsub = onValue(roomRef, snapshot => {
-    if (!snapshot.exists()) {
-      toast("Otaq artıq mövcud deyil.");
-      currentRoom = null;
-      showScreen("home");
-      return;
-    }
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => {
+    const replacements = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    };
 
-    roomData = snapshot.val();
-
-    if (lastEffectId === null) {
-      lastEffectId = roomData.lastShot?.id || "";
-    } else if (
-      roomData.lastShot?.id &&
-      roomData.lastShot.id !== lastEffectId
-    ) {
-      lastEffectId = roomData.lastShot.id;
-    }
-
-    renderRoom();
-  }, error => {
-    console.error(error);
-    toast("Otaq məlumatı yüklənmədi.");
+    return replacements[char];
   });
 }
 
-/* OTAQ YARAT */
-async function createRoom() {
-  if (busy) return;
-  busy = true;
-  message("");
 
-  try {
-    await authReady;
+function getCharacter(characterId) {
+  return CHARACTERS.find(
+    character => character.id === characterId
+  ) || CHARACTERS[0];
+}
 
-    const nickname = $("nickname").value.trim();
 
-    if (!nickname) {
-      message("Əvvəlcə oyunçu adını yaz.");
-      return;
+function getPlayerName(player) {
+  return player?.name || "Naməlum oyunçu";
+}
+
+
+function getRoundConfig(round) {
+  return ROUND_CONFIG[round] || ROUND_CONFIG[5];
+}
+
+
+function setText(id, value) {
+  const element = $(id);
+
+  if (element) {
+    element.textContent = value;
+  }
+}
+
+
+function showScreen(screenId) {
+  document.querySelectorAll(".screen").forEach(screen => {
+    screen.classList.remove("active");
+  });
+
+  const target = $(screenId);
+
+  if (target) {
+    target.classList.add("active");
+  }
+}
+
+
+function setBusy(value) {
+  busy = value;
+
+  document.querySelectorAll("button").forEach(button => {
+    if (button.dataset.ignoreBusy === "true") return;
+
+    button.disabled = value;
+  });
+}
+
+
+function showToast(message) {
+  const toast = $("toast");
+
+  if (!toast) {
+    console.log(message);
+    return;
+  }
+
+  toast.textContent = message;
+  toast.classList.add("show");
+
+  clearTimeout(toastTimeout);
+
+  toastTimeout = setTimeout(() => {
+    toast.classList.remove("show");
+  }, 2600);
+}
+
+
+function showError(message) {
+  const error = $("homeError");
+
+  if (error) {
+    error.textContent = message;
+  } else {
+    showToast(message);
+  }
+}
+
+
+function clearError() {
+  const error = $("homeError");
+
+  if (error) {
+    error.textContent = "";
+  }
+}
+
+
+function getNickname() {
+  const input = $("nickname");
+
+  const name = input?.value?.trim() || "";
+
+  if (name.length < 2) {
+    throw new Error("Ləqəb ən azı 2 simvoldan ibarət olmalıdır.");
+  }
+
+  if (name.length > 18) {
+    throw new Error("Ləqəb maksimum 18 simvol ola bilər.");
+  }
+
+  return name;
+}
+
+
+function requireAuth() {
+  if (!authReady || !uid) {
+    throw new Error("Serverə qoşulma gözlənilir. Bir az sonra yenidən yoxla.");
+  }
+}
+
+
+function getRoomRef() {
+  if (!currentRoom) {
+    throw new Error("Hazırda otaqda deyilsən.");
+  }
+
+  return ref(db, `rooms/${currentRoom}`);
+}
+
+
+function getMyPlayer() {
+  if (!roomData || !uid) return null;
+
+  return roomData.players?.[uid] || null;
+}
+
+
+function isHost() {
+  return roomData?.host === uid;
+}
+
+
+function getPlayers() {
+  if (!roomData?.players) return [];
+
+  return Object.entries(roomData.players).map(([id, player]) => ({
+    ...player,
+    uid: id
+  }));
+}
+
+
+function getAlivePlayers() {
+  return getPlayers().filter(player => player.alive !== false);
+}
+
+
+function getSelectedCardLimit() {
+  const round = Number(roomData?.round || 1);
+
+  return getRoundConfig(round).cards;
+}
+
+
+/* =========================================================
+   8. HADİSƏ SİSTEMİ
+========================================================= */
+
+function createEvent(message, type = "normal") {
+  return {
+    id: randomId(16),
+    message,
+    type,
+    time: Date.now()
+  };
+}
+
+
+function addRoomEvent(message, type = "normal") {
+  if (!currentRoom) return Promise.resolve();
+
+  const event = createEvent(message, type);
+  const events = Array.isArray(roomData?.events)
+    ? [...roomData.events]
+    : [];
+
+  events.push(event);
+
+  return update(getRoomRef(), {
+    events: events.slice(-60)
+  });
+}
+
+
+function renderEventLog(events = []) {
+  const log = $("eventLog");
+
+  if (!log) return;
+
+  log.innerHTML = "";
+
+  [...events].reverse().forEach(event => {
+    const entry = document.createElement("div");
+
+    entry.className = `event-entry event-${event.type || "normal"}`;
+    entry.textContent = event.message || "";
+
+    log.appendChild(entry);
+  });
+}
+
+
+function renderLatestEvent(events = []) {
+  const latest = $("latestEvent");
+
+  if (!latest || !events.length) return;
+
+  const event = events[events.length - 1];
+
+  if (!event || event.id === lastEventId) return;
+
+  lastEventId = event.id;
+  latest.textContent = event.message || "Oyun davam edir...";
+
+  latest.classList.remove("event-update");
+
+  // Animasiya yenidən başlasın.
+  void latest.offsetWidth;
+
+  latest.classList.add("event-update");
+}
+
+
+/* =========================================================
+   9. AUTHENTICATION — ANONİM GİRİŞ
+========================================================= */
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    uid = user.uid;
+    authReady = true;
+
+    const connection = $("connection");
+
+    if (connection) {
+      connection.textContent = "● SERVERƏ BAĞLI";
+      connection.style.color = "#54e39a";
     }
 
-    setConnection("OTAQ YARADILIR...");
+    console.log("Firebase istifadəçisi hazırdır:", uid);
 
-    let code;
-    let roomRef;
-    let exists = true;
+  } else {
+    authReady = false;
 
-    for (let i = 0; i < 10; i++) {
-      code = generateCode();
-      roomRef = ref(db, "rooms/" + code);
+    const connection = $("connection");
 
-      const snapshot = await get(roomRef);
+    if (connection) {
+      connection.textContent = "● BAĞLANTI GÖZLƏNİLİR";
+      connection.style.color = "#ffd447";
+    }
+
+    try {
+      await signInAnonymously(auth);
+    } catch (error) {
+      console.error("Anonim giriş xətası:", error);
+
+      showToast("Serverə qoşulmaq mümkün olmadı.");
+    }
+  }
+});
+
+
+/* =========================================================
+   10. SERVER BAĞLANTISININ İZLƏNMƏSİ
+========================================================= */
+
+const connectionRef = ref(db, ".info/connected");
+
+onValue(connectionRef, snapshot => {
+  const connected = snapshot.val() === true;
+  const connection = $("connection");
+
+  if (!connection) return;
+
+  if (connected) {
+    connection.textContent = "● SERVERƏ BAĞLI";
+    connection.style.color = "#54e39a";
+  } else {
+    connection.textContent = "● BAĞLANTI KƏSİLDİ";
+    connection.style.color = "#ff5364";
+  }
+});
+
+
+/* =========================================================
+   11. OTAQ MƏLUMATLARINI DİNLƏMƏ
+========================================================= */
+
+function unsubscribeRoom() {
+  if (roomUnsub) {
+    roomUnsub();
+    roomUnsub = null;
+  }
+}
+
+
+function subscribeRoom(roomCode) {
+  unsubscribeRoom();
+
+  currentRoom = roomCode;
+
+  const roomReference = ref(db, `rooms/${roomCode}`);
+
+  roomUnsub = onValue(
+    roomReference,
+
+    snapshot => {
+      if (!snapshot.exists()) {
+        roomData = null;
+
+        showToast("Otaq artıq mövcud deyil.");
+
+        unsubscribeRoom();
+        currentRoom = null;
+
+        showScreen("home");
+        return;
+      }
+
+      roomData = snapshot.val();
+
+      renderRoom();
+    },
+
+    error => {
+      console.error("Otaq dinləmə xətası:", error);
+
+      showToast("Otaq məlumatlarını almaq mümkün olmadı.");
+    }
+  );
+}
+
+
+/* =========================================================
+   12. OTAĞIN ÜMUMİ RENDER FUNKSİYASI
+========================================================= */
+
+function renderRoom() {
+  if (!roomData) return;
+
+  if (roomData.status === "lobby") {
+    renderLobby();
+    return;
+  }
+
+  if (
+    roomData.status === "cardSelection" ||
+    roomData.status === "card-selection"
+  ) {
+    renderCardSelection();
+
+    if (typeof renderCardSelectionExtra === "function") {
+      renderCardSelectionExtra();
+    }
+
+    return;
+  }
+
+  if (roomData.status === "game") {
+    showScreen("game");
+
+    if (typeof renderGameScreen === "function") {
+      renderGameScreen();
+    }
+
+    return;
+  }
+
+  if (roomData.status === "ended") {
+    showScreen("ended");
+
+    if (typeof renderEndScreen === "function") {
+      renderEndScreen();
+    }
+  }
+}
+
+
+/* =========================================================
+   13. OTAQ YARATMA
+========================================================= */
+
+async function createRoom() {
+  if (busy) return;
+
+  clearError();
+
+  try {
+    requireAuth();
+
+    const name = getNickname();
+
+    setBusy(true);
+
+    let roomCode = null;
+    let created = false;
+
+    // Eyni kodun təsadüfən təkrar düşməsinə qarşı yoxlama.
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const candidate = makeRoomCode();
+
+      const candidateRef = ref(db, `rooms/${candidate}`);
+      const snapshot = await get(candidateRef);
 
       if (!snapshot.exists()) {
-        exists = false;
+        roomCode = candidate;
         break;
       }
     }
 
-    if (exists) throw new Error("Otaq kodu yaradıla bilmədi.");
+    if (!roomCode) {
+      throw new Error("Otaq kodu yaratmaq mümkün olmadı. Yenidən yoxla.");
+    }
 
-    const room = {
-      code,
-      host: uid,
+    const character = CHARACTERS[0];
+
+    const newRoom = {
       status: "lobby",
+
+      host: uid,
+
+      createdAt: Date.now(),
+
       round: 1,
+
       currentTurn: uid,
+
       players: {
         [uid]: {
-          name: nickname,
-          character: CHARACTERS[0],
+          uid,
+          name,
+          character: character.id,
+          face: character.face,
+
           alive: true,
-          joinedAt: Date.now()
+          hearts: 2,
+
+          ready: false,
+          cardReady: false,
+
+          selectedCards: [],
+          usedCards: [],
+
+          joinedAt: Date.now(),
+          isBot: false
         }
       },
-      events: {
-        0: nickname + " otağı yaratdı."
-      }
+
+      events: [
+        createEvent(`${name} otağı yaratdı.`, "system")
+      ],
+
+      gameState: null
     };
 
-    await set(roomRef, room);
+    const roomReference = ref(db, `rooms/${roomCode}`);
 
-    subscribeRoom(code);
-    showScreen("lobby");
-    toast("Otaq yaradıldı!");
+    await set(roomReference, newRoom);
+
+    created = true;
+
+    if (created) {
+      subscribeRoom(roomCode);
+      showToast(`Otaq yaradıldı: ${roomCode}`);
+    }
 
   } catch (error) {
     console.error("Otaq yaratma xətası:", error);
-    message("Xəta: " + error.message);
-    setConnection("BAĞLANTI XƏTASI");
+
+    showError(error.message || "Otaq yaratmaq mümkün olmadı.");
+
   } finally {
-    busy = false;
+    setBusy(false);
   }
 }
 
-/* OTAĞA QOŞUL */
+
+/* =========================================================
+   14. OTAĞA QOŞULMA
+========================================================= */
+
 async function joinRoom() {
   if (busy) return;
-  busy = true;
-  message("");
+
+  clearError();
 
   try {
-    await authReady;
+    requireAuth();
 
-    const nickname = $("nickname").value.trim();
-    const code = $("roomCodeInput").value.trim().toUpperCase();
+    const name = getNickname();
 
-    if (!nickname) {
-      message("Oyunçu adını daxil et.");
-      return;
+    const code = $("roomCodeInput")?.value
+      ?.trim()
+      .toUpperCase();
+
+    if (!code || code.length !== 4) {
+      throw new Error("4 simvollu otaq kodunu daxil et.");
     }
 
-    if (code.length !== 4) {
-      message("Otaq kodu 4 simvol olmalıdır.");
-      return;
-    }
+    setBusy(true);
 
-    const roomRef = ref(db, "rooms/" + code);
-    const snapshot = await get(roomRef);
+    const roomReference = ref(db, `rooms/${code}`);
+    const snapshot = await get(roomReference);
 
     if (!snapshot.exists()) {
-      message("Belə otaq tapılmadı.");
+      throw new Error("Belə otaq tapılmadı.");
+    }
+
+    const data = snapshot.val();
+
+    if (data.status !== "lobby") {
+      throw new Error("Bu otaqda oyun artıq başlayıb.");
+    }
+
+    if (data.players?.[uid]) {
+      subscribeRoom(code);
       return;
     }
 
-    const room = snapshot.val();
+    const playerCount = Object.keys(data.players || {}).length;
 
-    if (room.status !== "lobby") {
-      message("Bu otaqda oyun artıq başlayıb.");
-      return;
+    if (playerCount >= 10) {
+      throw new Error("Otaq doludur. Maksimum 10 oyunçu ola bilər.");
     }
 
-    const players = room.players || {};
+    const character = CHARACTERS.find(character => {
+      return !Object.values(data.players || {}).some(
+        player => player.character === character.id
+      );
+    }) || randomItem(CHARACTERS);
 
-    if (Object.keys(players).length >= 10) {
-      message("Otaq doludur.");
-      return;
-    }
+    const newPlayer = {
+      uid,
+      name,
 
-    await update(roomRef, {
-      ["players/" + uid]: {
-        name: nickname,
-        character: CHARACTERS[0],
-        alive: true,
-        joinedAt: Date.now()
-      }
+      character: character.id,
+      face: character.face,
+
+      alive: true,
+      hearts: 2,
+
+      ready: false,
+      cardReady: false,
+
+      selectedCards: [],
+      usedCards: [],
+
+      joinedAt: Date.now(),
+      isBot: false
+    };
+
+    await update(
+      ref(db, `rooms/${code}/players/${uid}`),
+      newPlayer
+    );
+
+    await update(roomReference, {
+      events: [
+        ...(data.events || []),
+        createEvent(`${name} otağa qoşuldu.`, "system")
+      ].slice(-60)
     });
 
     subscribeRoom(code);
-    showScreen("lobby");
-    toast("Otağa qoşuldun!");
+
+    showToast("Otağa uğurla qoşuldun!");
 
   } catch (error) {
-    console.error("Qoşulma xətası:", error);
-    message("Xəta: " + error.message);
+    console.error("Otağa qoşulma xətası:", error);
+
+    showError(error.message || "Otağa qoşulmaq mümkün olmadı.");
+
   } finally {
-    busy = false;
+    setBusy(false);
   }
 }
 
-/* LOBBİ */
-function renderRoom() {
-  if (!roomData) return;
 
-  const players = Object.entries(roomData.players || {});
-  const isHost = roomData.host === uid;
+/* =========================================================
+   15. LOBBİ RENDER
+========================================================= */
 
-  $("roomCodeDisplay").textContent = currentRoom;
-  $("gameRoomCode").textContent = currentRoom;
-  $("playerCount").textContent = players.length + "/10";
+function renderLobby() {
+  showScreen("lobby");
 
-  $("playerList").innerHTML = players.map(([id, player]) => `
-    <div class="player-row">
-      <span>${escapeHTML(player.name)}</span>
-      <span>${id === roomData.host ? "HOST" : "OYUNÇU"}</span>
-    </div>
-  `).join("");
+  setText("roomCodeDisplay", currentRoom || "----");
 
-  $("characterSelect").innerHTML = CHARACTERS.map(character =>
-    `<option value="${escapeHTML(character)}">${escapeHTML(character)}</option>`
-  ).join("");
+  const players = getPlayers();
 
-  const me = roomData.players?.[uid];
+  setText("playerCount", `${players.length}/10`);
 
-  if (me) $("characterSelect").value = me.character;
+  renderPlayerList(players);
+  renderCharacterSelect();
 
-  $("startGame").style.display = isHost ? "block" : "none";
-  $("lobbyHint").textContent = isHost
-    ? "Dostların qoşulduqdan sonra oyunu başlada bilərsən."
-    : "Otaq sahibinin oyunu başlatmasını gözlə.";
+  const me = getMyPlayer();
 
-  if (roomData.status === "game") {
-    showScreen("game");
-    renderGame();
-  } else if (roomData.status === "ended") {
-    showScreen("ended");
-    renderEnd();
-  } else {
-    showScreen("lobby");
+  if ($("readyStatus")) {
+    $("readyStatus").textContent = me?.ready
+      ? "Hazırsan!"
+      : "Hələ hazır deyilsən.";
+  }
+
+  const readyButton = $("readyButton");
+
+  if (readyButton) {
+    readyButton.textContent = me?.ready
+      ? "Hazır deyiləm"
+      : "Hazıram";
+  }
+
+  const startButton = $("startGame");
+
+  if (startButton) {
+    startButton.style.display = isHost() ? "" : "none";
+
+    const allReady = players.length >= 2 &&
+      players.every(player => player.ready === true);
+
+    startButton.disabled = !allReady;
+
+    startButton.textContent = allReady
+      ? "OYUNA BAŞLA"
+      : "OYUNÇULARI GÖZLƏ";
+  }
+
+  const hint = $("lobbyHint");
+
+  if (hint) {
+    hint.textContent = isHost()
+      ? "Bütün oyunçular hazır olduqda oyunu başlada bilərsən."
+      : "Ev sahibinin oyunu başlatmasını gözlə.";
   }
 }
 
-/* HTML TƏHLÜKƏSİZLİYİ */
-function escapeHTML(value) {
-  return String(value).replace(/[&<>"']/g, char => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[char]);
+
+function renderPlayerList(players) {
+  const list = $("playerList");
+
+  if (!list) return;
+
+  list.innerHTML = "";
+
+  players.forEach(player => {
+    const character = getCharacter(player.character);
+
+    const item = document.createElement("div");
+
+    item.className = "player-item";
+
+    if (player.uid === roomData.host) {
+      item.classList.add("host");
+    }
+
+    const avatar = document.createElement("span");
+    avatar.className = "player-avatar";
+    avatar.textContent = character.face;
+
+    const name = document.createElement("span");
+    name.className = "player-name";
+    name.textContent = player.name;
+
+    const status = document.createElement("span");
+    status.className = "host-label";
+
+    if (player.uid === roomData.host) {
+      status.textContent = "HOST";
+    } else {
+      status.textContent = player.ready ? "HAZIR" : "GÖZLƏYİR";
+      status.style.color = player.ready
+        ? "#54e39a"
+        : "#b7afd7";
+    }
+
+    item.append(avatar, name, status);
+
+    list.appendChild(item);
+  });
 }
 
-/* PERSONAJ SEÇİMİ */
-async function changeCharacter() {
+
+/* =========================================================
+   16. PERSONAJ SEÇİMİ
+========================================================= */
+
+function renderCharacterSelect() {
+  const select = $("characterSelect");
+
+  if (!select) return;
+
+  const me = getMyPlayer();
+
+  if (!me) return;
+
+  const previousValue = me.character || CHARACTERS[0].id;
+
+  select.innerHTML = "";
+
+  
+CHARACTERS.forEach(character => {
+    const option = document.createElement("option");
+
+    option.value = character.id;
+    option.textContent =
+      `${character.face} ${character.name}`;
+
+    const usedByOther = getPlayers().some(player => {
+      return player.uid !== uid &&
+        player.character === character.id;
+    });
+
+    option.disabled = usedByOther;
+
+    select.appendChild(option);
+  });
+
+  select.value = previousValue;
+}
+
+
+async function changeCharacter(characterId) {
   if (!currentRoom || !uid) return;
 
-  const character = $("characterSelect").value;
+  const character = CHARACTERS.find(
+    item => item.id === characterId
+  );
 
-  try {
-    await update(
-      ref(db, `rooms/${currentRoom}/players/${uid}`),
-      { character }
-    );
-  } catch (error) {
-    console.error(error);
-    toast("Personaj dəyişdirilə bilmədi.");
-  }
-}
+  if (!character) return;
 
-/* OYUNU BAŞLAT */
-async function startGame() {
-  if (!roomData || roomData.host !== uid) return;
+  const usedByOther = getPlayers().some(player => {
+    return player.uid !== uid &&
+      player.character === characterId;
+  });
 
-  const players = Object.keys(roomData.players || {});
-
-  if (players.length < 2) {
-    toast("Başlamaq üçün ən azı 2 oyunçu lazımdır.");
+  if (usedByOther) {
+    showToast("Bu personaj artıq seçilib.");
     return;
   }
 
   try {
-    await update(ref(db, "rooms/" + currentRoom), {
-      status: "game",
-      currentTurn: players[0],
-      round: 1,
-      events: {
-        0: "Oyun başladı."
+    await update(
+      ref(db, `rooms/${currentRoom}/players/${uid}`),
+      {
+        character: character.id,
+        face: character.face,
+        ready: false
       }
-    });
+    );
+
+    showToast(`${character.name} seçildi.`);
+
   } catch (error) {
-    console.error(error);
-    toast("Oyun başlatmaq mümkün olmadı.");
+    console.error("Personaj dəyişmə xətası:", error);
+    showToast("Personajı dəyişmək mümkün olmadı.");
   }
 }
 
-/* NÖVBƏ */
-function alivePlayers() {
-  return Object.entries(roomData?.players || {})
-    .filter(([, player]) => player.alive);
-}
 
-function nextAliveId(players, currentId) {
-  const index = players.findIndex(([id]) => id === currentId);
-  return players[(index + 1) % players.length]?.[0];
-}
+/* =========================================================
+   17. HAZIR OLMA SİSTEMİ
+========================================================= */
 
-/* OYUN MASASI */
-function renderGame() {
-  if (!roomData) return;
+async function toggleReady() {
+  if (!currentRoom || !uid || busy) return;
 
-  const players = Object.entries(roomData.players || {});
-  const alive = alivePlayers();
-  const isMyTurn = roomData.currentTurn === uid;
+  const me = getMyPlayer();
 
-  $("aliveCount").textContent = alive.length + " OYUNÇU";
-  $("roundLabel").textContent = roomData.round || 1;
-
-  const currentPlayer = roomData.players?.[roomData.currentTurn];
-
-  $("turnLabel").textContent = isMyTurn
-    ? "SƏNİN NÖVBƏNDİR"
-    : currentPlayer
-      ? currentPlayer.name + " OYNAYIR"
-      : "NÖVBƏ GÖZLƏNİLİR";
-
-  const size = 33;
-  const center = 50;
-
-  $("seatList").innerHTML = players.map(([id, player], index) => {
-    const angle = (index / players.length) * Math.PI * 2 - Math.PI / 2;
-    const x = center + Math.cos(angle) * size;
-    const y = center + Math.sin(angle) * size;
-
-    return `
-      <div class="seat ${!player.alive ? "dead" : ""} ${id === roomData.currentTurn ? "current" : ""}"
-           style="left:${x}%;top:${y}%">
-        <div class="avatar">${player.alive ? "●" : "✕"}</div>
-        <span class="seat-name">${escapeHTML(player.name)}</span>
-        <span class="seat-char">${escapeHTML(player.character || "")}</span>
-      </div>
-    `;
-  }).join("") + `
-    <div class="table-gun">
-      <svg viewBox="0 0 200 100">
-        <path class="gun-barrel" d="M95 35 L190 35 L190 55 L95 55 Z"/>
-        <path class="gun-frame" d="M45 30 L105 30 L120 60 L100 72 L50 65 Z"/>
-        <circle class="gun-cylinder" cx="85" cy="48" r="22"/>
-        <circle class="gun-cylinder-hole" cx="85" cy="48" r="9"/>
-        <path class="gun-handle" d="M48 57 L80 65 L65 95 L40 85 Z"/>
-        <path class="gun-trigger" d="M110 60 Q125 75 112 80"/>
-        <circle class="gun-screw" cx="52" cy="42" r="3"/>
-      </svg>
-    </div>
-    <div class="shot-effect" id="shotEffect">
-      <div class="shot-burst"></div>
-      <div class="shot-word">BANG!</div>
-      <div class="shot-caption">MASA ARXASINDA</div>
-    </div>
-  `;
-
-  $("targetArea").innerHTML = alive.map(([id, player]) => `
-    <button class="target-btn ${selectedTarget === id ? "selected" : ""}"
-            data-target="${id}">
-      ${escapeHTML(player.name)}${id === uid ? " (SƏN)" : ""}
-    </button>
-  `).join("");
-
-  document.querySelectorAll("[data-target]").forEach(button => {
-    button.addEventListener("click", () => {
-      selectedTarget = button.dataset.target;
-      renderGame();
-    });
-  });
-
-  $("shootButton").disabled = !isMyTurn || !selectedTarget;
-  $("shootButton").textContent = isMyTurn
-    ? "HƏDƏFİ TƏSDİQLƏ VƏ ATƏŞ AÇ"
-    : "NÖVBƏNİ GÖZLƏ";
-
-  $("actionTitle").textContent = isMyTurn
-    ? "HƏDƏFİNİ SEÇ"
-    : "NÖVBƏ GÖZLƏNİLİR";
-
-  $("actionDescription").textContent = isMyTurn
-    ? "Masanın arxasında qərar sənindir."
-    : "Digər oyunçunun hərəkətini gözlə.";
-
-  $("eventLog").innerHTML = Object.values(roomData.events || {})
-    .slice(-8)
-    .reverse()
-    .map(event => `<div class="log-entry">${escapeHTML(event)}</div>`)
-    .join("");
-
-  if (roomData.lastShot?.id && roomData.lastShot.id !== lastEffectId) {
-    lastEffectId = roomData.lastShot.id;
-    const effect = $("shotEffect");
-    if (effect) {
-      effect.classList.add("play");
-    }
-  }
-}
-
-let selectedTarget = null;
-
-/* ATƏŞ */
-async function shoot() {
-  if (busy || !currentRoom || !selectedTarget) return;
-
-  busy = true;
+  if (!me) return;
 
   try {
-    const roomRef = ref(db, "rooms/" + currentRoom);
-
-    await runTransaction(roomRef, room => {
-      if (!room || room.status !== "game") return;
-
-      if (room.currentTurn !== uid) return;
-
-      const players = room.players || {};
-      const shooter = players[uid];
-      const target = players[selectedTarget];
-
-      if (!shooter?.alive || !target?.alive) return;
-
-      const hit = Math.random() < 0.5;
-
-      if (hit) {
-        target.alive = false;
+    await update(
+      ref(db, `rooms/${currentRoom}/players/${uid}`),
+      {
+        ready: !me.ready
       }
-
-      const alive = Object.entries(players)
-        .filter(([, player]) => player.alive);
-
-      const events = room.events || {};
-      events[Date.now()] = hit
-        ? shooter.name + " atəş açdı. " + target.name + " oyundan çıxdı."
-        : shooter.name + " atəş açdı. Güllə boş çıxdı!";
-
-      const shotId = Date.now() + "-" + Math.random();
-
-      room.lastShot = {
-        id: shotId,
-        hit,
-        shooter: uid,
-        target: selectedTarget
-      };
-
-      room.events = events;
-
-      if (alive.length <= 1) {
-        room.status = "ended";
-        room.winner = alive[0]?.[0] || null;
-      } else if (hit || selectedTarget !== uid) {
-        room.currentTurn = nextAliveId(alive, uid);
-      }
-
-      return room;
-    });
-
-    selectedTarget = null;
+    );
 
   } catch (error) {
-    console.error(error);
-    toast("Atəş açmaq mümkün olmadı.");
-  } finally {
-    busy = false;
+    console.error("Hazır olma xətası:", error);
+    showToast("Status dəyişdirilə bilmədi.");
   }
 }
 
-/* OYUN SONU */
-function renderEnd() {
-  const winner = roomData.players?.[roomData.winner];
 
-  $("winnerTitle").textContent = winner?.name || "HEÇ KİM";
-  $("winnerText").textContent = winner
-    ? winner.character + " masanın sonuncu sahibi oldu."
-    : "Oyun başa çatdı.";
+/* =========================================================
+   18. OYUNUN BAŞLANMASI
+========================================================= */
+
+async function startGame() {
+  if (busy || !currentRoom || !isHost()) return;
+
+  try {
+    const players = getPlayers();
+
+    if (players.length < 2) {
+      throw new Error("Oyun üçün ən azı 2 oyunçu lazımdır.");
+    }
+
+    if (players.length > 10) {
+      throw new Error("Maksimum 10 oyunçu ola bilər.");
+    }
+
+    if (!players.every(player => player.ready === true)) {
+      throw new Error("Bütün oyunçular hazır olmalıdır.");
+    }
+
+    setBusy(true);
+
+    const initialRound = 1;
+    const roundConfig = getRoundConfig(initialRound);
+
+    const updates = {
+      status: "cardSelection",
+      round: initialRound,
+      currentTurn: null,
+
+      gameState: {
+        round: initialRound,
+        chambers: roundConfig.chambers,
+        bullets: roundConfig.bullets,
+        shotsTaken: 0,
+        shotLimit: null,
+        chamberIndex: 0,
+        chamberOrder: [],
+        selectedTarget: null,
+        selectionStartedAt: Date.now(),
+        selectionEndsAt:
+          Date.now() + roundConfig.selectionTime * 1000,
+        cardSelectionsComplete: false
+      },
+
+      events: [
+        ...(roomData.events || []),
+        createEvent(
+          "Oyun başlayır! Birinci raund: kart seçimi.",
+          "system"
+        )
+      ].slice(-60)
+    };
+
+    const playerUpdates = {};
+
+    players.forEach(player => {
+      playerUpdates[`players/${player.uid}/ready`] = false;
+      playerUpdates[`players/${player.uid}/cardReady`] = false;
+      playerUpdates[`players/${player.uid}/selectedCards`] = [];
+      playerUpdates[`players/${player.uid}/usedCards`] = [];
+      playerUpdates[`players/${player.uid}/alive`] = true;
+      playerUpdates[`players/${player.uid}/hearts`] = 2;
+    });
+
+    await update(getRoomRef(), {
+      ...updates,
+      ...playerUpdates
+    });
+
+    selectedCards = [];
+
+  } catch (error) {
+    console.error("Oyuna başlama xətası:", error);
+    showToast(error.message || "Oyunu başlatmaq mümkün olmadı.");
+
+  } finally {
+    setBusy(false);
+  }
 }
 
-/* OTAQDAN ÇIX */
+
+/* =========================================================
+   19. KART SEÇİMİ EKRANI
+========================================================= */
+
+function renderCardSelection() {
+  showScreen("cardSelection");
+
+  const round = Number(roomData.round || 1);
+  const config = getRoundConfig(round);
+  const me = getMyPlayer();
+
+  if (!me) return;
+
+  setText("cardRound", `RAUND ${round}`);
+
+  setText(
+    "cardSelectionDescription",
+    config.automaticCards
+      ? "Bu raundda hər oyunçuya təsadüfi 3 fərqli kart veriləcək."
+      : `Bu raund üçün ${config.cards} kart seçməlisən.`
+  );
+
+  setText(
+    "selectedCardCount",
+    `${(me.selectedCards || []).length}/${config.cards}`
+  );
+
+  setText(
+    "cardTimer",
+    config.automaticCards
+      ? "AVTOMATİK SEÇİM"
+      : "SEÇİM MÜDDƏTİ: 30 SANİYƏ"
+  );
+
+  const grid = $("cardGrid");
+
+  if (!grid) return;
+
+  const cards = grid.querySelectorAll(".game-card");
+  const playerCards = me.selectedCards || [];
+
+  cards.forEach(button => {
+    const cardId = button.dataset.card;
+    const card = CARD_DATA[cardId];
+
+    if (!card) return;
+
+    const selected = playerCards.includes(cardId);
+
+    button.classList.toggle("selected", selected);
+
+    button.setAttribute(
+      "aria-pressed",
+      selected ? "true" : "false"
+    );
+
+    const icon = button.querySelector(
+      ".card-image, .card-icon"
+    );
+
+    if (icon) {
+      icon.textContent = card.icon;
+    }
+
+    const name = button.querySelector(".card-name");
+
+    if (name) {
+      name.textContent = card.name;
+    }
+
+    const description = button.querySelector(
+      ".card-description"
+    );
+
+    if (description) {
+      description.textContent = card.description;
+    }
+
+    const used = (me.usedCards || []).includes(cardId);
+
+    button.disabled = used && !selected;
+  });
+
+  const confirmButton = $("confirmCards");
+
+  if (confirmButton) {
+    const ready = me.cardReady === true;
+
+    confirmButton.textContent = ready
+      ? "SEÇİM TƏSDİQLƏNDİ"
+      : "KARTLARI TƏSDİQLƏ";
+
+    confirmButton.disabled =
+      ready ||
+      (!config.automaticCards &&
+       playerCards.length !== config.cards);
+  }
+}
+
+
+/* =========================================================
+   20. KART SEÇMƏ / SEÇİMDƏN ÇIXARMA
+========================================================= */
+
+async function toggleCard(cardId) {
+  if (!currentRoom || !uid || busy) return;
+
+  if (!CARD_DATA[cardId]) return;
+
+  const me = getMyPlayer();
+
+  if (!me || me.cardReady) return;
+
+  const round = Number(roomData.round || 1);
+  const config = getRoundConfig(round);
+
+  if (config.automaticCards) {
+    showToast("Bu raundda kartlar avtomatik verilir.");
+    return;
+  }
+
+  const currentSelection = [
+    ...(me.selectedCards || [])
+  ];
+
+  const alreadySelected = currentSelection.includes(cardId);
+
+  let newSelection;
+
+  if (alreadySelected) {
+    newSelection = currentSelection.filter(
+      id => id !== cardId
+    );
+  } else {
+    if (currentSelection.length >= config.cards) {
+      showToast(
+        `Bu raundda yalnız ${config.cards} kart seçə bilərsən.`
+      );
+      return;
+    }
+
+    if ((me.usedCards || []).includes(cardId)) {
+      showToast("Bu kart artıq istifadə olunub.");
+      return;
+    }
+
+    newSelection = [...currentSelection, cardId];
+  }
+
+  try {
+    await update(
+      ref(db, `rooms/${currentRoom}/players/${uid}`),
+      {
+        selectedCards: newSelection
+      }
+    );
+
+  } catch (error) {
+    console.error("Kart seçmə xətası:", error);
+    showToast("Kart seçimini dəyişmək mümkün olmadı.");
+  }
+}
+
+
+/* =========================================================
+   21. KARTLARIN TƏSDİQLƏNMƏSİ
+========================================================= */
+
+async function confirmCards() {
+  if (!currentRoom || !uid || busy) return;
+
+  const me = getMyPlayer();
+
+  if (!me || me.cardReady) return;
+
+  const round = Number(roomData.round || 1);
+  const config = getRoundConfig(round);
+
+  let cards = [...(me.selectedCards || [])];
+
+  if (config.automaticCards) {
+    cards = selectRandomCards(
+      config.cards,
+      me.usedCards || []
+    );
+  } else if (cards.length !== config.cards) {
+    showToast(`Dəqiq ${config.cards} kart seçməlisən.`);
+    return;
+  }
+
+  try {
+    setBusy(true);
+
+    await update(
+      ref(db, `rooms/${currentRoom}/players/${uid}`),
+      {
+        selectedCards: cards,
+        cardReady: true
+      }
+    );
+
+    showToast("Kart seçimin təsdiqləndi!");
+
+    if (typeof startRoundEngine === "function") {
+      await startRoundEngine();
+    }
+
+  } catch (error) {
+    console.error("Kart təsdiqləmə xətası:", error);
+    showToast("Kartları təsdiqləmək mümkün olmadı.");
+
+  } finally {
+    setBusy(false);
+  }
+}
+
+
+function selectRandomCards(count, excluded = []) {
+  const available = Object.keys(CARD_DATA).filter(
+    id => !excluded.includes(id)
+  );
+
+  const shuffled = [...available];
+
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+
+    [shuffled[i], shuffled[j]] =
+      [shuffled[j], shuffled[i]];
+  }
+
+  return shuffled.slice(0, count);
+}
+
+
+/* =========================================================
+   22. KART SEÇİMİNİN ÜMUMİ YOXLAMASI
+========================================================= */
+
+function allPlayersSelectedCards() {
+  const players = getAlivePlayers();
+
+  return players.length >= 2 &&
+    players.every(player => player.cardReady === true);
+}
+
+
+/* =========================================================
+   23. OTAQDAN ÇIXMA
+========================================================= */
+
 async function leaveRoom() {
   if (!currentRoom || !uid) {
     showScreen("home");
     return;
   }
 
+  const code = currentRoom;
+
   try {
-    const roomRef = ref(db, "rooms/" + currentRoom);
-    const snapshot = await get(roomRef);
+    const roomReference = ref(db, `rooms/${code}`);
+    const snapshot = await get(roomReference);
 
-    if (snapshot.exists()) {
-      const room = snapshot.val();
+    if (!snapshot.exists()) {
+      unsubscribeRoom();
+      currentRoom = null;
+      roomData = null;
 
-      if (room.host === uid) {
-        await remove(roomRef);
-      } else {
-        await remove(ref(db, `rooms/${currentRoom}/players/${uid}`));
-      }
+      showScreen("home");
+      return;
     }
+
+    const data = snapshot.val();
+    const players = data.players || {};
+
+    const remainingPlayers = Object.keys(players).filter(
+      id => id !== uid
+    );
+
+    if (remainingPlayers.length === 0) {
+      await remove(roomReference);
+
+    } else {
+      const updates = {};
+
+      updates[`players/${uid}`] = null;
+
+      if (data.host === uid) {
+        updates.host = remainingPlayers[0];
+
+        const newHost = players[remainingPlayers[0]];
+
+        updates.events = [
+          ...(data.events || []),
+          createEvent(
+            `${newHost?.name || "Yeni oyunçu"} yeni ev sahibi oldu.`,
+            "system"
+          )
+        ].slice(-60);
+
+      } else {
+        updates.events = [
+          ...(data.events || []),
+          createEvent(
+            `${players[uid]?.name || "Oyunçu"} otaqdan çıxdı.`,
+            "system"
+          )
+        ].slice(-60);
+      }
+
+      await update(roomReference, updates);
+    }
+
   } catch (error) {
-    console.error(error);
+    console.error("Otaqdan çıxma xətası:", error);
+
+  } finally {
+    unsubscribeRoom();
+
+    currentRoom = null;
+    roomData = null;
+
+    selectedCards = [];
+    selectedTarget = null;
+
+    isPracticeMode = false;
+
+    showScreen("home");
   }
-
-  if (roomUnsub) roomUnsub();
-
-  roomUnsub = null;
-  currentRoom = null;
-  roomData = null;
-  selectedTarget = null;
-
-  showScreen("home");
 }
 
-/* KODU KOPYALA */
+
+/* =========================================================
+   24. OTAQ KODUNU KOPYALAMA
+========================================================= */
+
 async function copyRoomCode() {
   if (!currentRoom) return;
 
   try {
     await navigator.clipboard.writeText(currentRoom);
-    toast("Otaq kodu kopyalandı!");
-  } catch {
-    toast("Kod: " + currentRoom);
+    showToast("Otaq kodu kopyalandı!");
+
+  } catch (error) {
+    console.error("Kopyalama xətası:", error);
+    showToast(`Otaq kodu: ${currentRoom}`);
   }
 }
 
-/* DÜYMƏLƏR */
-$("createRoom").addEventListener("click", createRoom);
-$("joinRoom").addEventListener("click", joinRoom);
-$("startGame").addEventListener("click", startGame);
-$("characterSelect").addEventListener("change", changeCharacter);
-$("shootButton").addEventListener("click", shoot);
-$("leaveLobby").addEventListener("click", leaveRoom);
-$("leaveGame").addEventListener("click", leaveRoom);
-$("backHome").addEventListener("click", leaveRoom);
-$("copyCode").addEventListener("click", copyRoomCode);
 
-/* BAŞLANĞIC */
-showScreen("home");
-setConnection("BAĞLANTI GÖZLƏNİLİR");
-  
+/* =========================================================
+   25. DÜYMƏLƏRİN VƏ FORM ELEMENTLƏRİNİN BAĞLANMASI
+========================================================= */
+
+function bindButton(id, callback) {
+  const element = $(id);
+
+  if (!element) return;
+
+  element.addEventListener("click", callback);
+}
+
+
+function setupEventListeners() {
+
+  // Ana menyu
+  bindButton("createRoom", createRoom);
+  bindButton("joinRoom", joinRoom);
+
+  // Qaydalar
+  bindButton("openRules", () => {
+    showScreen("rules");
+  });
+
+  bindButton("closeRules", () => {
+    showScreen("home");
+  });
+
+  // Lobbİ
+  bindButton("copyCode", copyRoomCode);
+  bindButton("readyButton", toggleReady);
+  bindButton("startGame", startGame);
+  bindButton("leaveLobby", leaveRoom);
+
+  // Kart seçimi
+  bindButton("confirmCards", confirmCards);
+
+  // Personaj seçimi
+  const characterSelect = $("characterSelect");
+
+  if (characterSelect) {
+    characterSelect.addEventListener("change", event => {
+      changeCharacter(event.target.value);
+    });
+  }
+
+  // Kart düymələri
+  document.querySelectorAll(".game-card").forEach(button => {
+    button.addEventListener("click", () => {
+      const cardId = button.dataset.card;
+
+      if (cardId) {
+        toggleCard(cardId);
+      }
+    });
+  });
+
+  // Enter ilə otağa qoşulmaq
+  const roomInput = $("roomCodeInput");
+
+  if (roomInput) {
+    roomInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        joinRoom();
+      }
+    });
+
+    roomInput.addEventListener("input", event => {
+      event.target.value = event.target.value
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "")
+        .slice(0, 4);
+    });
+  }
+
+  // Enter ilə otaq yaratmaq
+  const nicknameInput = $("nickname");
+
+  if (nicknameInput) {
+    nicknameInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        createRoom();
+      }
+    });
+  }
+}
+
+
+/* =========================================================
+   26. TƏHLÜKƏSİZ BAŞLANĞIC
+========================================================= */
+
+function initializeGame() {
+  setupEventListeners();
+
+  const connection = $("connection");
+
+  if (connection) {
+    connection.textContent = "● SERVERƏ BAĞLANIR";
+  }
+
+  showScreen("home");
+
+  console.log(
+    "%cMASA ARXASINDA",
+    "color:#ffd447;font-size:22px;font-weight:bold;"
+  );
+
+  console.log(
+    "%cGame Engine — Part 1 loaded",
+    "color:#54e39a;font-size:13px;"
+  );
+}
+
+
+if (document.readyState === "loading") {
+  document.addEventListener(
+    "DOMContentLoaded",
+    initializeGame,
+    { once: true }
+  );
+} else {
+  initializeGame();
+}
+
+
+/* =========================================================
+   1-Cİ HİSSƏ BURADA BİTİR.
+========================================================= */
+
+/* =========================================================
+   MASA ARXASINDA — GAME.JS
+   PART 2 — OYUN MEXANİKASI
+   Bu hissəni PART 1-in sonuna əlavə et.
+========================================================= */
+
+/* =========================
+   OYUN DƏYİŞƏNLƏRİ
+========================= */
+
+let selectionInterval = null;
+let faceInterval = null;
+let practiceState = null;
+let practiceInterval = null;
+let currentSwapRequest = null;
+let isShooting = false;
+
+/* =========================
+   KÖMƏKÇİ FUNKSİYALAR
+========================= */
+
+function shuffleArray(array) {
+  const result = [...array];
+
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+
+  return result;
+}
+
+function getShotLimit(playerCount) {
+  if (playerCount <= 3) return 2;
+  if (playerCount <= 5) return 3;
+  if (playerCount <= 7) return 4;
+  return 5;
+}
+
+function getCurrentGameState() {
+  if (isPracticeMode && practiceState) {
+    return practiceState;
+  }
+
+  return roomData?.gameState || null;
+}
+
+function getCurrentPlayers() {
+  if (isPracticeMode && practiceState) {
+    return practiceState.players;
+  }
+
+  return roomData?.players || {};
+}
+
+function getCurrentPlayerId() {
+  return isPracticeMode ? "practice-player" : uid;
+}
+
+function getCurrentPlayer() {
+  return getCurrentPlayers()[getCurrentPlayerId()] || null;
+}
+
+function getNextAlivePlayer(players, currentId) {
+  const ids = Object.keys(players);
+  const alive = ids.filter(id => players[id]?.alive);
+
+  if (alive.length <= 1) return alive[0] || null;
+
+  const currentIndex = ids.indexOf(currentId);
+
+  for (let i = 1; i <= ids.length; i++) {
+    const nextId = ids[(currentIndex + i) % ids.length];
+
+    if (players[nextId]?.alive) {
+      return nextId;
+    }
+  }
+
+  return null;
+}
+
+function getAliveCount(players) {
+  return Object.values(players).filter(p => p?.alive).length;
+}
+
+function getPlayerDisplayName(player) {
+  return player?.nickname || player?.name || "Naməlum";
+}
+
+function getCardInfo(cardId) {
+  return CARDS.find(card => card.id === cardId);
+}
+
+function hasUsableCard(player, cardId) {
+  return (
+    Array.isArray(player?.selectedCards) &&
+    player.selectedCards.includes(cardId) &&
+    !(player.usedCards || []).includes(cardId)
+  );
+}
+
+/* =========================
+   EVENTLƏR
+========================= */
+
+async function publishGameEvent(message, type = "normal") {
+  if (isPracticeMode && practiceState) {
+    practiceState.events = practiceState.events || [];
+
+    practiceState.events.unshift({
+      id: randomId(),
+      message,
+      type,
+      time: Date.now()
+    });
+
+    practiceState.events = practiceState.events.slice(0, 30);
+    renderPracticeGame();
+    return;
+  }
+
+  if (!currentRoom) return;
+
+  const event = {
+    id: randomId(),
+    message,
+    type,
+    time: Date.now()
+  };
+
+  try {
+    await set(
+      ref(db, `rooms/${currentRoom}/events/${event.id}`),
+      event
+    );
+  } catch (error) {
+    console.error("Event yazılmadı:", error);
+  }
+}
+
+/* =========================
+   RAUND MEXANİKASI
+========================= */
+
+async function startRoundEngine() {
+  if (isPracticeMode) {
+    startPracticeRound();
+    return;
+  }
+
+  if (!isHost() || !roomData) return;
+
+  const state = roomData.gameState;
+  if (!state || state.phase !== "cardSelection") return;
+
+  const players = roomData.players || {};
+  const playerIds = Object.keys(players);
+
+  if (playerIds.length < 2) return;
+
+  const allReady = playerIds.every(id => {
+    return players[id].cardReady === true;
+  });
+
+  const config = getRoundConfig(state.round);
+
+  if (!allReady && !config.automaticCards) return;
+
+  const chamberArray = Array(config.chambers).fill(false);
+
+  let placed = 0;
+
+  while (placed < config.bullets) {
+    const index = Math.floor(Math.random() * chamberArray.length);
+
+    if (!chamberArray[index]) {
+      chamberArray[index] = true;
+      placed++;
+    }
+  }
+
+  const shuffledChambers = shuffleArray(chamberArray);
+
+  const updates = {};
+
+  for (const id of playerIds) {
+    const player = players[id];
+
+    let cards = player.selectedCards || [];
+
+    if (config.automaticCards) {
+      cards = shuffleArray(CARDS.map(card => card.id)).slice(
+        0,
+        config.cards
+      );
+    }
+
+    updates[`players/${id}/selectedCards`] = cards;
+    updates[`players/${id}/usedCards`] = [];
+    updates[`players/${id}/cardReady`] = false;
+  }
+
+  const newState = {
+    ...state,
+    phase: "playing",
+    chambers: shuffledChambers,
+    chamberIndex: 0,
+    bulletsLeft: config.bullets,
+    shotsTaken: 0,
+    shotLimit: getShotLimit(playerIds.length),
+    currentTurn: state.firstTurn || playerIds[0],
+    pendingSwap: null,
+    startedAt: Date.now()
+  };
+
+  updates.gameState = newState;
+
+  try {
+    await update(getRoomRef(), updates);
+    await publishGameEvent(
+      `${state.round}-ci raund başladı!`,
+      "round"
+    );
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+async function beginNextRound() {
+  if (isPracticeMode) {
+    startPracticeRound();
+    return;
+  }
+
+  if (!isHost() || !roomData) return;
+
+  const state = roomData.gameState;
+  if (!state || state.phase !== "roundEnd") return;
+
+  const nextRound = state.round + 1;
+  const players = roomData.players || {};
+  const aliveIds = Object.keys(players).filter(
+    id => players[id]?.alive
+  );
+
+  if (aliveIds.length <= 1) {
+    await finishGame();
+    return;
+  }
+
+  if (nextRound > 5) {
+    await finishGame();
+    return;
+  }
+
+  const config = getRoundConfig(nextRound);
+  const updates = {};
+
+  for (const id of aliveIds) {
+    updates[`players/${id}/cardReady`] = false;
+    updates[`players/${id}/selectedCards`] = [];
+    updates[`players/${id}/usedCards`] = [];
+  }
+
+  updates.gameState = {
+    round: nextRound,
+    phase: "cardSelection",
+    chambers: [],
+    chamberIndex: 0,
+    bulletsLeft: config.bullets,
+    shotsTaken: 0,
+    shotLimit: getShotLimit(aliveIds.length),
+    currentTurn: aliveIds[0],
+    firstTurn: aliveIds[0],
+    pendingSwap: null,
+    selectionEndsAt: config.selectionTime
+      ? Date.now() + config.selectionTime * 1000
+      : null
+  };
+
+  try {
+    await update(getRoomRef(), updates);
+    await publishGameEvent(
+      `${nextRound}-ci raund üçün kart seçimi başladı!`,
+      "round"
+    );
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+/* =========================
+   KART SEÇİMİ SAYĞACI
+========================= */
+
+function startSelectionTimer() {
+  clearInterval(selectionInterval);
+
+  if (isPracticeMode || !roomData) return;
+
+  const state = roomData.gameState;
+  if (state?.phase !== "cardSelection") return;
+
+  const config = getRoundConfig(state.round);
+
+  if (!config.selectionTime) {
+    if (isHost()) startRoundEngine();
+    return;
+  }
+
+  selectionInterval = setInterval(async () => {
+    const currentState = roomData?.gameState;
+
+    if (!currentState || currentState.phase !== "cardSelection") {
+      clearInterval(selectionInterval);
+      return;
+    }
+
+    const remaining = Math.max(
+      0,
+      Math.ceil((currentState.selectionEndsAt - Date.now()) / 1000)
+    );
+
+    setText("cardTimer", `${remaining} saniyə`);
+
+    if (remaining <= 0 && isHost()) {
+      clearInterval(selectionInterval);
+
+      const players = roomData.players || {};
+      const updates = {};
+
+      for (const [id, player] of Object.entries(players)) {
+        if (player.cardReady) continue;
+
+        let cards = player.selectedCards || [];
+
+        while (cards.length < config.cards) {
+          const available = CARDS
+            .map(card => card.id)
+            .filter(cardId => !cards.includes(cardId));
+
+          if (!available.length) break;
+
+          cards.push(randomItem(available));
+        }
+
+        updates[`players/${id}/selectedCards`] = cards;
+        updates[`players/${id}/cardReady`] = true;
+      }
+
+      if (Object.keys(updates).length) {
+        await update(getRoomRef(), updates);
+      }
+
+      setTimeout(() => startRoundEngine(), 500);
+    }
+  }, 500);
+}
+
+/* =========================
+   OYUN EKRANININ RENDERİ
+========================= */
+
+function renderGameScreen() {
+  const state = getCurrentGameState();
+  const players = getCurrentPlayers();
+
+  if (!state || !players) return;
+
+  const alivePlayers = Object.entries(players).filter(
+    ([id, player]) => player?.alive
+  );
+
+  setText("gameRoomCode", currentRoom || "MƏŞQ");
+  setText("aliveCount", alivePlayers.length);
+  setText("roundLabel", state.round);
+  setText("chamberCount", state.chambers?.length || 0);
+  setText("bulletsLeft", state.bulletsLeft ?? 0);
+  setText("shotsTaken", state.shotsTaken ?? 0);
+  setText("shotLimit", state.shotLimit ?? 0);
+
+  const currentTurnPlayer = players[state.currentTurn];
+
+  setText(
+    "turnLabel",
+    currentTurnPlayer
+      ? `${getPlayerDisplayName(currentTurnPlayer)} oynayır`
+      : "Növbə gözlənilir"
+  );
+
+  renderSeats();
+  renderActiveCards();
+  renderLatestEvent();
+  renderEventLog();
+
+  const myTurn = state.currentTurn === getCurrentPlayerId();
+  const canShoot =
+    state.phase === "playing" &&
+    myTurn &&
+    !isShooting &&
+    !state.pendingSwap &&
+    state.shotsTaken < state.shotLimit;
+
+  const shootButton = $("shootButton");
+
+  if (shootButton) {
+    shootButton.disabled = !canShoot;
+    shootButton.textContent = canShoot
+      ? "ATƏŞ AÇ"
+      : "NÖVBƏNİ GÖZLƏ";
+  }
+
+  showScreen("game");
+}
+
+function renderSeats() {
+  const seatList = $("seatList");
+  if (!seatList) return;
+
+  const players = getCurrentPlayers();
+  const state = getCurrentGameState();
+
+  seatList.innerHTML = "";
+
+  const entries = Object.entries(players);
+  const alive = entries.filter(([id, player]) => player?.alive);
+
+  entries.forEach(([id, player], index) => {
+    const character = getCharacter(player.character);
+    const isCurrent = state?.currentTurn === id;
+
+    const seat = document.createElement("div");
+    seat.className = `seat ${player.alive ? "" : "eliminated"} ${
+      isCurrent ? "current-turn" : ""
+    }`;
+
+    seat.innerHTML = `
+      <div class="face">
+        ${character?.emoji || "👤"}
+      </div>
+      <div class="seat-name">
+        ${escapeHTML(getPlayerDisplayName(player))}
+      </div>
+      <div class="seat-hearts">
+        ${"❤️".repeat(Math.max(0, player.hearts || 0))}
+      </div>
+      <div class="seat-status">
+        ${player.alive ? "OYUNDA" : "ƏLƏNİB"}
+      </div>
+    `;
+
+    seat.dataset.playerId = id;
+
+    if (player.alive && id !== getCurrentPlayerId()) {
+      seat.addEventListener("click", () => {
+        if (state?.currentTurn !== getCurrentPlayerId()) return;
+        if (state?.phase !== "playing") return;
+
+        selectedTarget = id;
+        highlightTarget(id);
+      });
+    }
+
+    seatList.appendChild(seat);
+  });
+}
+
+function highlightTarget(targetId) {
+  document.querySelectorAll(".seat").forEach(seat => {
+    seat.classList.toggle(
+      "selected-target",
+      seat.dataset.playerId === targetId
+    );
+  });
+
+  const target = getCurrentPlayers()[targetId];
+
+  if (target) {
+    setText(
+      "shotResult",
+      `Hədəf: ${getPlayerDisplayName(target)}`
+    );
+  }
+}
+
+function renderActiveCards() {
+  const container = $("activeCards");
+  if (!container) return;
+
+  const player = getCurrentPlayer();
+  const state = getCurrentGameState();
+
+  container.innerHTML = "";
+
+  if (!player || state?.phase !== "playing") return;
+
+  (player.selectedCards || []).forEach(cardId => {
+    const card = getCardInfo(cardId);
+    if (!card) return;
+
+    const used = (player.usedCards || []).includes(cardId);
+
+    const button = document.createElement("button");
+    button.className = `active-card ${used ? "used" : ""}`;
+    button.disabled = used;
+    button.textContent = `${card.name}${used ? " — İSTİFADƏ OLUNUB" : ""}`;
+
+    button.addEventListener("click", () => activateCard(cardId));
+
+    container.appendChild(button);
+  });
+}
+
+/* =========================
+   KARTLARIN AKTİVLƏŞDİRİLMƏSİ
+========================= */
+
+async function activateCard(cardId) {
+  const state = getCurrentGameState();
+  const player = getCurrentPlayer();
+
+  if (!state || !player) return;
+  if (state.phase !== "playing") return;
+  if (state.currentTurn !== getCurrentPlayerId()) return;
+  if (!hasUsableCard(player, cardId)) return;
+
+  if (cardId === "detective") {
+    const nextBullet = state.chambers?.[state.chamberIndex];
+
+    if (nextBullet === undefined) {
+      showToast("Daraqda güllə qalmayıb.");
+      return;
+    }
+
+    await markCardUsed(cardId);
+
+    showToast(
+      nextBullet
+        ? "Detektiv: Növbəti kamerada GÜLLƏ var."
+        : "Detektiv: Növbəti kamera BOŞDUR."
+    );
+
+    await publishGameEvent(
+      `${getPlayerDisplayName(player)} Detektiv kartından istifadə etdi.`,
+      "card"
+    );
+
+    return;
+  }
+
+  if (cardId === "counter") {
+    showToast("Əks təsir aktivdir. Növbəti gülləli zərbəni bloklayacaq.");
+    await markCardUsed(cardId);
+    await publishGameEvent(
+      `${getPlayerDisplayName(player)} Əks təsir kartını aktivləşdirdi.`,
+      "card"
+    );
+    return;
+  }
+
+  if (cardId === "witch") {
+    showToast("İfritəlik aktivdir: növbəti atəşin dəymə ehtimalı 80%-dir.");
+    await markCardUsed(cardId);
+    await setTemporaryEffect("witch");
+    return;
+  }
+
+  if (cardId === "selfLove") {
+    showToast("Canını sevmək aktivdir: özünə atəş açanda dəymə ehtimalı 25%-dir.");
+    await markCardUsed(cardId);
+    await setTemporaryEffect("selfLove");
+    return;
+  }
+
+  if (cardId === "swap") {
+    showToast("Yerdəyişmə kartı aktivdir. Sənə atəş açılanda seçim edə biləcəksən.");
+    await markCardUsed(cardId);
+    await setTemporaryEffect("swap");
+    return;
+  }
+
+  if (cardId === "evil") {
+    showToast("İbnəlik aktivdir: növbəti atəşdə xüsusi nəticə tətbiq olunacaq.");
+    await markCardUsed(cardId);
+    await setTemporaryEffect("evil");
+    return;
+  }
+}
+
+async function markCardUsed(cardId) {
+  if (isPracticeMode) {
+    const player = getCurrentPlayer();
+
+    player.usedCards = player.usedCards || [];
+
+    if (!player.usedCards.includes(cardId)) {
+      player.usedCards.push(cardId);
+    }
+
+    renderPracticeGame();
+    return;
+  }
+
+  const player = getMyPlayer();
+  if (!player) return;
+
+  const used = player.usedCards || [];
+
+  if (!used.includes(cardId)) {
+    await update(
+      ref(db, `rooms/${currentRoom}/players/${uid}`),
+      { usedCards: [...used, cardId] }
+    );
+  }
+}
+
+async function setTemporaryEffect(effect) {
+  if (isPracticeMode) {
+    practiceState.effects = practiceState.effects || {};
+    practiceState.effects[getCurrentPlayerId()] =
+      practiceState.effects[getCurrentPlayerId()] || {};
+
+    practiceState.effects[getCurrentPlayerId()][effect] = true;
+    renderPracticeGame();
+    return;
+  }
+
+  const effects = roomData.gameState.effects || {};
+  const myEffects = effects[uid] || {};
+
+  await update(getRoomRef(), {
+    [`gameState/effects/${uid}/${effect}`]: true
+  });
+}
+
+/* =========================
+   ATƏŞ AÇMA
+========================= */
+
+async function shootTarget(targetId) {
+  if (isShooting) return;
+
+  const state = getCurrentGameState();
+  const players = getCurrentPlayers();
+  const shooterId = getCurrentPlayerId();
+
+  if (!state || state.phase !== "playing") return;
+  if (state.currentTurn !== shooterId) return;
+  if (!players[targetId]?.alive) return;
+  if (targetId === shooterId && !hasSelfTargetPermission()) {
+    showToast("Özünə atəş açmaq üçün Canını sevmək kartı lazımdır.");
+    return;
+  }
+
+  if (state.shotsTaken >= state.shotLimit) {
+    showToast("Bu raund üçün atəş limitin bitib.");
+    return;
+  }
+
+  if (state.chamberIndex >= state.chambers.length) {
+    showToast("Daraq boşalıb.");
+    return;
+  }
+
+  isShooting = true;
+
+  const chamberLoaded = state.chambers[state.chamberIndex];
+
+  const shooter = players[shooterId];
+  const target = players[targetId];
+
+  const effects = state.effects || {};
+  const shooterEffects = effects[shooterId] || {};
+
+  let hitChance = chamberLoaded ? 1 : 0;
+  let forcedHit = null;
+
+  if (shooterEffects.witch) {
+    hitChance = 0.8;
+  }
+
+  if (targetId === shooterId && shooterEffects.selfLove) {
+    hitChance = 0.25;
+  }
+
+  if (shooterEffects.witch || shooterEffects.selfLove) {
+    forcedHit = Math.random() < hitChance;
+  } else {
+    forcedHit = chamberLoaded;
+  }
+
+  const isEvil = !!shooterEffects.evil;
+
+  const result = {
+    shooterId,
+    targetId,
+    loaded: chamberLoaded,
+    hit: forcedHit,
+    evil: isEvil,
+    time: Date.now()
+  };
+
+  await playShotAnimation(targetId);
+
+  if (isPracticeMode) {
+    await resolvePracticeShot(result);
+  } else {
+    await resolveOnlineShot(result);
+  }
+
+  isShooting = false;
+}
+
+function hasSelfTargetPermission() {
+  const player = getCurrentPlayer();
+
+  return (
+    player &&
+    (player.selectedCards || []).includes("selfLove")
+  );
+}
+
+async function playShotAnimation(targetId) {
+  const gun = $("tableGun");
+  const effect = $("shotEffect");
+
+  const targetSeat = document.querySelector(
+    `.seat[data-player-id="${targetId}"]`
+  );
+
+  if (gun && targetSeat) {
+    gun.classList.add("aiming");
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 600));
+
+  if (effect) {
+    effect.classList.add("active");
+  }
+
+  const blackout = $("blackout");
+
+  if (blackout) {
+    blackout.classList.add("active");
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 900));
+
+  if (blackout) {
+    blackout.classList.remove("active");
+  }
+
+  if (effect) {
+    effect.classList.remove("active");
+  }
+
+  if (gun) {
+    gun.classList.remove("aiming");
+  }
+}
+
+/* =========================
+   ONLAYN ATƏŞİN HƏLLİ
+========================= */
+
+async function resolveOnlineShot(result) {
+  if (!isHost()) {
+    showToast("Atəş nəticəsini otaq sahibi təsdiqləyir.");
+    return;
+  }
+
+  const state = roomData.gameState;
+  const players = roomData.players || {};
+
+  if (state.currentTurn !== result.shooterId) return;
+
+  const shooter = players[result.shooterId];
+  const target = players[result.targetId];
+
+  if (!shooter || !target) return;
+
+  const nextIndex = state.chamberIndex + 1;
+  const nextShots = state.shotsTaken + 1;
+
+  const updates = {};
+
+  updates["gameState/chamberIndex"] = nextIndex;
+  updates["gameState/bulletsLeft"] = Math.max(
+    0,
+    state.bulletsLeft - (result.loaded ? 1 : 0)
+  );
+  updates["gameState/shotsTaken"] = nextShots;
+
+  updates[`gameState/effects/${result.shooterId}/witch`] = null;
+  updates[`gameState/effects/${result.shooterId}/selfLove`] = null;
+  updates[`gameState/effects/${result.shooterId}/evil`] = null;
+
+  let message = "";
+
+  if (result.evil) {
+    if (result.hit) {
+      updates[`players/${result.targetId}/hearts`] = 0;
+      updates[`players/${result.targetId}/alive`] = false;
+
+      message = `${getPlayerDisplayName(target)} İbnəlik kartı ilə oyundan çıxarıldı!`;
+    } else {
+      const newHearts = Math.max(0, shooter.hearts - 1);
+
+      updates[`players/${result.shooterId}/hearts`] = newHearts;
+
+      if (newHearts <= 0) {
+        updates[`players/${result.shooterId}/alive`] = false;
+      }
+
+      message = `${getPlayerDisplayName(shooter)} İbnəlik kartına görə 1 can itirdi.`;
+    }
+  } else if (result.hit) {
+    const targetEffects = state.effects?.[result.targetId] || {};
+
+    if (targetEffects.counter) {
+      updates[`gameState/effects/${result.targetId}/counter`] = null;
+
+      const newHearts = Math.min(3, target.hearts + 1);
+
+      updates[`players/${result.targetId}/hearts`] = newHearts;
+
+      message = `${getPlayerDisplayName(target)} Əks təsir ilə gülləni blokladı və 1 can qazandı!`;
+    } else if (targetEffects.swap) {
+      updates["gameState/pendingSwap"] = {
+        shooterId: result.shooterId,
+        targetId: result.targetId,
+        result,
+        createdAt: Date.now()
+      };
+
+      await update(getRoomRef(), updates);
+
+      showSwapPrompt(
+        result.shooterId,
+        result.targetId
+      );
+
+      
