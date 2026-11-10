@@ -1238,3 +1238,271 @@ footer {
   }
   }
   
+/* =========================================
+   MASA ARXASINDA — PREMIUM MENU REDESIGN
+   ========================================= */
+
+:root {
+  --bg: #100d12;
+  --panel: #1d171b;
+  --panel-light: #302127;
+  --purple: #8b2635;
+  --pink: #d84955;
+  --yellow: #e9bd70;
+  --blue: #83a8b8;
+  --green: #63c995;
+  --red: #ed4550;
+  --white: #f5eee7;
+  --muted: #b6a6a0;
+  --border: #634047;
+}
+
+/* ÜMUMİ ATMOSFER */
+
+html {
+  background: #100d12 !important;
+}
+
+body {
+  background-color: #100d12 !important;
+  background-image:
+    radial-gradient(circle at 15% 20%, #a62d3b22 0 2px, transparent 3px),
+    radial-gradient(circle at 80% 35%, #e9bd7018 0 2px, transparent 3px),
+    radial-gradient(circle at 45% 80%, #7e354422 0 3px, transparent 4px),
+    linear-gradient(145deg, #100d12, #1b1119 55%, #100d12) !important;
+  background-size: 55px 55px, 75px 75px, 95px 95px, auto;
+  color: var(--white);
+}
+
+/* ANA MENYU */
+
+#home {
+  width: min(100%, 560px) !important;
+  max-width: 560px !important;
+  padding: 35px 0 20px !important;
+}
+
+#home .pixel-title {
+  font-family: var(--font) !important;
+  font-weight: 900;
+  font-size: clamp(27px, 7vw, 43px) !important;
+  line-height: 1.2 !important;
+  letter-spacing: 2px;
+  text-align: left !important;
+  color: #f4d4a2 !important;
+  text-shadow: 0 4px 20px #c33d4b55 !important;
+  margin: 18px 0 12px !important;
+}
+
+#home .subtitle {
+  color: #c7aeb0 !important;
+  letter-spacing: 2px;
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 25px !important;
+}
+
+/* MENYU PANELLƏRİ */
+
+#home .panel {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 17px;
+  padding: 23px 20px !important;
+  background: linear-gradient(145deg, #281c23, #1c151b) !important;
+  border: 1px solid #70404b !important;
+  border-radius: 17px !important;
+  box-shadow:
+    0 12px 30px #0007,
+    inset 0 1px 0 #ffffff0b !important;
+}
+
+#home .panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 18px;
+  right: 18px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #e9bd70, transparent);
+}
+
+#home .panel-title {
+  font-family: var(--font) !important;
+  font-size: 15px !important;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--yellow) !important;
+  margin-bottom: 20px !important;
+}
+
+/* INPUTLAR */
+
+#home .input-group {
+  gap: 9px;
+  margin-bottom: 18px;
+}
+
+#home .input-group label {
+  color: #e3c8bc !important;
+  font-weight: 900;
+  font-size: 13px;
+}
+
+#home input,
+#home select {
+  min-height: 53px;
+  padding: 13px 15px;
+  background: #120f14 !important;
+  border: 1px solid #77505a !important;
+  border-radius: 11px !important;
+  color: #fff5e9 !important;
+  font-size: 15px;
+  box-shadow: inset 0 3px 8px #0006;
+}
+
+#home input:focus,
+#home select:focus {
+  border-color: var(--yellow) !important;
+  outline: none;
+  box-shadow: 0 0 0 3px #e9bd7022;
+}
+
+#home input::placeholder {
+  color: #88747b !important;
+}
+
+/* BÜTÜN MENYU DÜYMƏLƏRİ */
+
+#home button {
+  min-height: 49px;
+  padding: 12px 17px;
+  border: 1px solid #a64b57 !important;
+  border-bottom: 4px solid #66232d !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #a72e40, #762332) !important;
+  color: #fff6ee !important;
+  font-family: var(--font) !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  letter-spacing: .4px;
+  box-shadow: 0 5px 15px #0004;
+  transition: .18s ease;
+}
+
+#home button:active {
+  transform: translateY(3px);
+  border-bottom-width: 1px !important;
+  filter: brightness(.9);
+}
+
+#home button:disabled {
+  opacity: .4;
+  filter: grayscale(.6);
+}
+
+/* OTAQ YARAT */
+
+#createRoom {
+  width: 100%;
+  background: linear-gradient(135deg, #e9bd70, #b98242) !important;
+  color: #28180f !important;
+  border-color: #f5d99c !important;
+  border-bottom-color: #81532c !important;
+  font-size: 15px !important;
+}
+
+/* OTAĞA QOŞUL */
+
+#joinRoom {
+  width: 100%;
+  background: linear-gradient(135deg, #3f8395, #28576d) !important;
+  border-color: #73b2c3 !important;
+  border-bottom-color: #183d4d !important;
+}
+
+/* PRAKTİKA */
+
+#practiceButton {
+  width: 100%;
+  background: linear-gradient(135deg, #a72e40, #762332) !important;
+}
+
+#botCount {
+  width: 100%;
+}
+
+/* QAYDALAR */
+
+#openRules {
+  width: 100%;
+  margin-top: 12px;
+  background: #292027 !important;
+  border-color: #73545b !important;
+  border-bottom-color: #39242b !important;
+  color: #e9bd70 !important;
+}
+
+/* HOME DÜYMƏ ARALARI */
+
+#home .home-buttons {
+  display: grid;
+  gap: 12px;
+  margin-top: 17px;
+}
+
+#home .home-buttons button {
+  width: 100%;
+}
+
+/* BAĞLANTI STATUSU */
+
+#connection {
+  top: 9px;
+  right: 9px;
+  padding: 8px 11px;
+  background: #191318ee !important;
+  border: 1px solid #78515a !important;
+  border-radius: 8px;
+  font-size: 10px;
+  backdrop-filter: blur(10px);
+}
+
+/* FOOTER */
+
+footer {
+  color: #806d72 !important;
+  letter-spacing: 1px;
+  font-size: 10px;
+  margin-top: 25px;
+}
+
+/* TELEFON OPTİMİZASİYASI */
+
+@media (max-width: 430px) {
+  body {
+    padding: 10px !important;
+  }
+
+  #home {
+    padding-top: 42px !important;
+  }
+
+  #home .panel {
+    padding: 20px 16px !important;
+    border-radius: 15px !important;
+  }
+
+  #home .pixel-title {
+    font-size: 29px !important;
+  }
+
+  #home .subtitle {
+    font-size: 11px;
+  }
+
+  #connection {
+    font-size: 9px;
+  }
+  }
+
