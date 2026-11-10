@@ -2501,5 +2501,817 @@ async function resolveOnlineShot(result) {
         result.shooterId,
         result.targetId
       );
+       return;
+} else {
+const newHearts = Math.max(0, target.hearts - 1);
+
+updates[`players/${result.targetId}/hearts`] = newHearts;
+
+      updates[`players/${result.targetId}/hearts`] = newHearts;
+
+      if (newHearts <= 0) {
+        updates[`players/${result.targetId}/alive`] = false;
+      }
+
+      message = `${getPlayerDisplayName(target)} güllə dəydi və 1 can itirdi.`;
+    }
+  } else {
+    message = "Atəş açıldı, amma güllə boş idi.";
+  }
+
+  updates["gameState/pendingSwap"] = null;
+
+  const updatedPlayers = structuredClone(players);
+
+  if (updates[`players/${result.targetId}/hearts`] !== undefined) {
+    updatedPlayers[result.targetId].hearts =
+      updates[`players/${result.targetId}/hearts`];
+
+    updatedPlayers[result.targetId].alive =
+      updatedPlayers[result.targetId].hearts > 0;
+  }
+
+  if (updates[`players/${result.shooterId}/hearts`] !== undefined) {
+    updatedPlayers[result.shooterId].hearts =
+      updates[`players/${result.shooterId}/hearts`];
+
+    updatedPlayers[result.shooterId].alive =
+      updatedPlayers[result.shooterId].hearts > 0;
+  }
+
+  const aliveCount = getAliveCount(updatedPlayers);
+
+  if (aliveCount <= 1) {
+    updates["gameState/phase"] = "gameEnd";
+  } else if (
+    nextShots >= state.shotLimit ||
+    nextIndex >= state.chambers.length
+  ) {
+    updates["gameState/phase"] = "roundEnd";
+  } else {
+    const nextPlayer = getNextAlivePlayer(
+      updatedPlayers,
+      result.shooterId
+    );
+
+    updates["gameState/currentTurn"] = nextPlayer;
+  }
+
+  try {
+    await update(getRoomRef(), updates);
+
+    await publishGameEvent(message, result.hit ? "danger" : "normal");
+
+    if (aliveCount <= 1) {
+      await finishGame();
+    }
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+/* =========================
+   YERDƏYİŞMƏ
+========================= */
+
+function showSwapPrompt(shooterId, targetId) {
+  const modal = $("swapPrompt");
+  if (!modal) return;
+
+  const shooter = getCurrentPlayers()[shooterId];
+
+  setText(
+    "swapMessage",
+    `${getPlayerDisplayName(shooter)} səni hədəfə aldı. Zərbəni ona qaytarmaq istəyirsən?`
+  );
+
+  modal.classList.add("active");
+}
+
+async function answerSwap(accept) {
+  if (isPracticeMode) {
+    await resolvePracticeSwap(accept);
+    return;
+  }
+
+  const state = roomData?.gameState;
+  const pending = state?.pendingSwap;
+
+  if (!pending || pending.targetId !== uid) return;
+
+  const modal = $("swapPrompt");
+  if (modal) modal.classList.remove("active");
+
+  const players = roomData.players || {};
+  const shooter = players[pending.shooterId];
+  const target = players[pending.targetId];
+
+  const updates = {
+    "gameState/pendingSwap": null,
+    [`gameState/effects/${pending.targetId}/swap`]: null
+  };
+
+  let message = "";
+
+  if (accept) {
+    const newHearts = Math.max(0, shooter.hearts - 1);
+
+    updates[`players/${pending.shooterId}/hearts`] = newHearts;
+
+    if (newHearts <= 0) {
+      updates[`players/${pending.shooterId}/alive`] = false;
+    }
+
+    message = `${getPlayerDisplayName(target)} Yerdəyişmə etdi! ${getPlayerDisplayName(shooter)} 1 can itirdi.`;
+  } else {
+    const newHearts = Math.max(0, target.hearts - 1);
+
+    updates[`players/${pending.targetId}/hearts`] = newHearts;
+
+    if (newHearts <= 0) {
+      updates[`players/${pending.targetId}/alive`] = false;
+    }
+
+    message = `${getPlayerDisplayName(target)} Yerdəyişmədən imtina etdi və 1 can itirdi.`;
+  }
+
+  if (
+    state.shotsTaken >= state.shotLimit ||
+    state.chamberIndex >= state.chambers.length
+  ) {
+    updates["gameState/phase"] = "roundEnd";
+  } else {
+    updates["gameState/currentTurn"] = getNextAlivePlayer(
+      players,
+      pending.shooterId
+    );
+  }
+
+  await update(getRoomRef(), updates);
+  await publishGameEvent(message, "danger");
+}
+
+/* =========================
+   RAUND / OYUN SONU
+========================= */
+
+async function finishGame() {
+  if (isPracticeMode) {
+    const alive = Object.values(practiceState.players).filter(
+      player => player.alive
+    );
+
+    practiceState.phase = "gameEnd";
+    practiceState.winner = alive[0] || null;
+
+    renderPracticeEnd();
+    return;
+  }
+
+  if (!isHost() || !roomData) return;
+
+  const players = roomData.players || {};
+  const alive = Object.entries(players).filter(
+    ([id, player]) => player.alive
+  );
+
+  const winner = alive.length === 1
+    ? alive[0][1]
+    : null;
+
+  await update(getRoomRef(), {
+    "gameState/phase": "gameEnd",
+    "gameState/winner": winner
+      ? getPlayerDisplayName(winner)
+      : "Heç kim"
+  });
+
+  showScreen("ended");
+
+  setText(
+    "winnerTitle",
+    winner ? `${getPlayerDisplayName(winner)} QALİB OLDU!` : "OYUN BİTDİ"
+  );
+
+  setText(
+    "winnerText",
+    winner
+      ? "Masa arxasında sonuncu sağ qalan oyunçu!"
+      : "Bu oyunda qalib müəyyən olunmadı."
+  );
+}
+
+function renderPracticeEnd() {
+  const winner = practiceState.winner;
+
+  showScreen("ended");
+
+  setText(
+    "winnerTitle",
+    winner
+      ? `${getPlayerDisplayName(winner)} QALİB OLDU!`
+      : "OYUN BİTDİ"
+  );
+
+  setText(
+    "winnerText",
+    winner
+      ? "Məşq rejiminin qalibi!"
+      : "Heç kim sağ qalmadı."
+  );
+}
+
+/* =========================
+   MƏŞQ REJİMİ — BOTLAR
+========================= */
+
+function startPracticeMode() {
+  const nickname = getNickname();
+  const count = Number($("botCount")?.value || 3);
+
+  if (!nickname) {
+    showToast("Əvvəlcə adını yaz.");
+    return;
+  }
+
+  isPracticeMode = true;
+  currentRoom = null;
+
+  const human = {
+    nickname,
+    character: CHARACTERS[0].id,
+    hearts: 2,
+    alive: true,
+    selectedCards: [],
+    usedCards: [],
+    cardReady: false,
+    isBot: false
+  };
+
+  const players = {
+    "practice-player": human
+  };
+
+  for (let i = 0; i < count; i++) {
+    const character = CHARACTERS[(i + 1) % CHARACTERS.length];
+
+    players[`bot-${i + 1}`] = {
+      nickname: `BOT ${i + 1}`,
+      character: character.id,
+      hearts: 2,
+      alive: true,
+      selectedCards: [],
+      usedCards: [],
+      cardReady: false,
+      isBot: true
+    };
+  }
+
+  practiceState = {
+    round: 1,
+    phase: "cardSelection",
+    players,
+    chambers: [],
+    chamberIndex: 0,
+    bulletsLeft: 2,
+    shotsTaken: 0,
+    shotLimit: getShotLimit(count + 1),
+    currentTurn: "practice-player",
+    effects: {},
+    events: [],
+    pendingSwap: null,
+    winner: null
+  };
+
+  showScreen("cardSelection");
+  renderPracticeCardSelection();
+}
+
+function renderPracticeCardSelection() {
+  const config = getRoundConfig(practiceState.round);
+
+  setText("cardRound", practiceState.round);
+  setText("cardsToChoose", config.cards);
+  setText(
+    "cardSelectionDescription",
+    `Məşq rejimi — ${config.cards} kart seç.`
+  );
+
+  selectedCards = [];
+
+  document.querySelectorAll(".game-card").forEach(button => {
+    button.classList.remove("selected");
+    button.disabled = false;
+  });
+
+  setText("selectedCardCount", `0 / ${config.cards}`);
+}
+
+function startPracticeRound() {
+  if (!practiceState) return;
+
+  const config = getRoundConfig(practiceState.round);
+  const chamberArray = Array(config.chambers).fill(false);
+
+  let placed = 0;
+
+  while (placed < config.bullets) {
+    const index = Math.floor(Math.random() * chamberArray.length);
+
+    if (!chamberArray[index]) {
+      chamberArray[index] = true;
+      placed++;
+    }
+  }
+
+  practiceState.chambers = shuffleArray(chamberArray);
+  practiceState.chamberIndex = 0;
+  practiceState.bulletsLeft = config.bullets;
+  practiceState.shotsTaken = 0;
+  practiceState.shotLimit = getShotLimit(
+    Object.keys(practiceState.players).length
+  );
+  practiceState.phase = "playing";
+  practiceState.effects = {};
+
+  for (const [id, player] of Object.entries(practiceState.players)) {
+    if (!player.alive) continue;
+
+    player.usedCards = [];
+
+    if (id !== "practice-player") {
+      player.selectedCards = shuffleArray(
+        CARDS.map(card => card.id)
+      ).slice(0, config.cards);
+    }
+  }
+
+  practiceState.currentTurn = "practice-player";
+
+  showScreen("game");
+  renderPracticeGame();
+  publishGameEvent(`${practiceState.round}-ci raund başladı!`);
+}
+
+function renderPracticeGame() {
+  if (!practiceState) return;
+
+  renderGameScreen();
+
+  const events = practiceState.events || [];
+
+  setText(
+    "latestEvent",
+    events[0]?.message || "Oyun başladı."
+  );
+
+  const eventLog = $("eventLog");
+
+  if (eventLog) {
+    eventLog.innerHTML = events
+      .slice(0, 15)
+      .map(event => `<div class="event-item">${escapeHTML(event.message)}</div>`)
+      .join("");
+  }
+}
+
+async function resolvePracticeShot(result) {
+  const players = practiceState.players;
+  const shooter = players[result.shooterId];
+  const target = players[result.targetId];
+
+  practiceState.chamberIndex++;
+  practiceState.shotsTaken++;
+
+  if (result.loaded) {
+    practiceState.bulletsLeft--;
+  }
+
+  const effects = practiceState.effects || {};
+  const shooterEffects = effects[result.shooterId] || {};
+  const targetEffects = effects[result.targetId] || {};
+
+  shooterEffects.witch = false;
+  shooterEffects.selfLove = false;
+  shooterEffects.evil = false;
+
+  let message = "";
+
+  if (result.evil) {
+    if (result.hit) {
+      target.hearts = 0;
+      target.alive = false;
+
+      message = `${target.nickname} İbnəlik kartı ilə oyundan çıxdı!`;
+    } else {
+      shooter.hearts = Math.max(0, shooter.hearts - 1);
+
+      if (shooter.hearts <= 0) shooter.alive = false;
+
+      message = `${shooter.nickname} 1 can itirdi.`;
+    }
+  } else if (result.hit) {
+    if (targetEffects.counter) {
+      targetEffects.counter = false;
+      target.hearts = Math.min(3, target.hearts + 1);
+
+      message = `${target.nickname} Əks təsir ilə qorundu və 1 can qazandı!`;
+    } else if (targetEffects.swap) {
+      practiceState.pendingSwap = {
+        shooterId: result.shooterId,
+        targetId: result.targetId
+      };
+
+      currentSwapRequest = practiceState.pendingSwap;
+      showSwapPrompt(result.shooterId, result.targetId);
+      renderPracticeGame();
+      return;
+    } else {
+      target.hearts = Math.max(0, target.hearts - 1);
+
+      if (target.hearts <= 0) target.alive = false;
+
+      message = `${target.nickname} güllə dəydi və 1 can itirdi.`;
+    }
+  } else {
+    message = "Güllə boş idi.";
+  }
+
+  await publishGameEvent(message, result.hit ? "danger" : "normal");
+
+  const aliveCount = getAliveCount(players);
+
+  if (aliveCount <= 1) {
+    finishGame();
+    return;
+  }
+
+  if (
+    practiceState.shotsTaken >= practiceState.shotLimit ||
+    practiceState.chamberIndex >= practiceState.chambers.length
+  ) {
+    practiceState.phase = "roundEnd";
+    renderPracticeRoundEnd();
+    return;
+  }
+
+  practiceState.currentTurn = getNextAlivePlayer(
+    players,
+    result.shooterId
+  );
+
+  renderPracticeGame();
+
+  if (practiceState.currentTurn.startsWith("bot-")) {
+    setTimeout(botTurn, 1200);
+  }
+}
+
+async function resolvePracticeSwap(accept) {
+  const pending = practiceState?.pendingSwap;
+  if (!pending) return;
+
+  const shooter = practiceState.players[pending.shooterId];
+  const target = practiceState.players[pending.targetId];
+
+  if (accept) {
+    shooter.hearts = Math.max(0, shooter.hearts - 1);
+
+    if (shooter.hearts <= 0) shooter.alive = false;
+
+    await publishGameEvent(
+      `${target.nickname} Yerdəyişmə etdi. ${shooter.nickname} 1 can itirdi.`,
+      "danger"
+    );
+  } else {
+    target.hearts = Math.max(0, target.hearts - 1);
+
+    if (target.hearts <= 0) target.alive = false;
+
+    await publishGameEvent(
+      `${target.nickname} Yerdəyişmədən imtina etdi və 1 can itirdi.`,
+      "danger"
+    );
+  }
+
+  practiceState.pendingSwap = null;
+  currentSwapRequest = null;
+
+  const modal = $("swapPrompt");
+  if (modal) modal.classList.remove("active");
+
+  const aliveCount = getAliveCount(practiceState.players);
+
+  if (aliveCount <= 1) {
+    finishGame();
+    return;
+  }
+
+  if (
+    practiceState.shotsTaken >= practiceState.shotLimit ||
+    practiceState.chamberIndex >= practiceState.chambers.length
+  ) {
+    practiceState.phase = "roundEnd";
+    renderPracticeRoundEnd();
+    return;
+  }
+
+  practiceState.currentTurn = getNextAlivePlayer(
+    practiceState.players,
+    pending.shooterId
+  );
+
+  renderPracticeGame();
+
+  if (practiceState.currentTurn.startsWith("bot-")) {
+    setTimeout(botTurn, 1200);
+  }
+}
+
+/* =========================
+   BOT SİSTEMİ
+========================= */
+
+function botTurn() {
+  if (!practiceState || practiceState.phase !== "playing") return;
+
+  const botId = practiceState.currentTurn;
+
+  if (!botId || !botId.startsWith("bot-")) return;
+
+  const bot = practiceState.players[botId];
+
+  if (!bot || !bot.alive) return;
+
+  const aliveTargets = Object.entries(practiceState.players)
+    .filter(([id, player]) => id !== botId && player.alive);
+
+  if (!aliveTargets.length) return;
+
+  const [targetId, target] = randomItem(aliveTargets);
+
+  const effects = practiceState.effects[botId] || {};
+  practiceState.effects[botId] = effects;
+
+  if (
+    bot.selectedCards.includes("detective") &&
+    !bot.usedCards.includes("detective")
+  ) {
+    bot.usedCards.push("detective");
+
+    publishGameEvent(
+      `${bot.nickname} Detektiv kartından istifadə etdi.`
+    );
+  }
+
+  if (
+    bot.selectedCards.includes("counter") &&
+    !bot.usedCards.includes("counter") &&
+    bot.hearts <= 1
+  ) {
+    bot.usedCards.push("counter");
+    effects.counter = true;
+  }
+
+  if (
+    bot.selectedCards.includes("witch") &&
+    !bot.usedCards.includes("witch")
+  ) {
+    bot.usedCards.push("witch");
+    effects.witch = true;
+  }
+
+  if (
+    bot.selectedCards.includes("evil") &&
+    !bot.usedCards.includes("evil")
+  ) {
+    bot.usedCards.push("evil");
+    effects.evil = true;
+  }
+
+  const loaded = practiceState.chambers[
+    practiceState.chamberIndex
+  ];
+
+  let hit = loaded;
+
+  if (effects.witch) {
+    hit = Math.random() < 0.8;
+  }
+
+  const result = {
+    shooterId: botId,
+    targetId,
+    loaded,
+    hit,
+    evil: !!effects.evil,
+    time: Date.now()
+  };
+
+  playShotAnimation(targetId).then(() => {
+    resolvePracticeShot(result);
+  });
+}
+
+/* =========================
+   MƏŞQ RAUNDUNUN SONU
+========================= */
+
+function renderPracticeRoundEnd() {
+  const alive = Object.values(practiceState.players).filter(
+    player => player.alive
+  );
+
+  if (alive.length <= 1) {
+    finishGame();
+    return;
+  }
+
+  setText(
+    "latestEvent",
+    `${practiceState.round}-ci raund başa çatdı.`
+  );
+
+  setText("turnLabel", "Raund bitdi");
+
+  const shootButton = $("shootButton");
+
+  if (shootButton) {
+    shootButton.disabled = false;
+    shootButton.textContent = "NÖVBƏTİ RAUND";
+    shootButton.onclick = () => {
+      practiceState.round++;
+
+      if (practiceState.round > 5) {
+        finishGame();
+      } else {
+        renderPracticeCardSelection();
+        showScreen("cardSelection");
+      }
+    };
+  }
+
+  renderPracticeGame();
+}
+
+/* =========================
+   ATƏŞ DÜYMƏSİ
+========================= */
+
+function handleShootButton() {
+  const state = getCurrentGameState();
+
+  if (!state || state.phase !== "playing") return;
+
+  if (state.currentTurn !== getCurrentPlayerId()) {
+    showToast("Hələ sənin növbən deyil.");
+    return;
+  }
+
+  if (!selectedTarget) {
+    showToast("Əvvəlcə hədəf oyunçunu seç.");
+    return;
+  }
+
+  shootTarget(selectedTarget);
+}
+
+/* =========================
+   ÜZ ANİMASİYALARI
+========================= */
+
+function startFaceAnimations() {
+  clearInterval(faceInterval);
+
+  faceInterval = setInterval(() => {
+    document.querySelectorAll(".face").forEach(face => {
+      face.classList.add("blink");
+
+      setTimeout(() => {
+        face.classList.remove("blink");
+      }, 180);
+    });
+  }, 3000);
+}
+
+/* =========================
+   OYUN EKRANININ YENİLƏNMƏSİ
+========================= */
+
+function renderRoom() {
+  if (isPracticeMode) {
+    renderPracticeGame();
+    return;
+  }
+
+  if (!roomData) return;
+
+  const state = roomData.gameState;
+  if (!state) return;
+
+  if (state.phase === "cardSelection") {
+    showScreen("cardSelection");
+    renderCardSelection();
+    startSelectionTimer();
+  }
+
+  if (state.phase === "playing") {
+    clearInterval(selectionInterval);
+    renderGameScreen();
+  }
+
+  if (state.phase === "roundEnd") {
+    renderGameScreen();
+
+    const button = $("shootButton");
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "NÖVBƏTİ RAUND";
+      button.onclick = () => {
+        if (isHost()) beginNextRound();
+        else showToast("Növbəti raundu otaq sahibi başladacaq.");
+      };
+    }
+  }
+
+  if (state.phase === "gameEnd") {
+    showScreen("ended");
+
+    setText(
+      "winnerTitle",
+      `${state.winner || "Oyun"} QALİB OLDU!`
+    );
+
+    setText(
+      "winnerText",
+      "Masa arxasında oyun başa çatdı."
+    );
+  }
+
+  if (state.pendingSwap?.targetId === uid) {
+    showSwapPrompt(
+      state.pendingSwap.shooterId,
+      state.pendingSwap.targetId
+    );
+  }
+}
+
+/* =========================
+   DÜYMƏLƏR
+========================= */
+
+function setupGameControls() {
+  const shootButton = $("shootButton");
+
+  if (shootButton) {
+    shootButton.addEventListener("click", handleShootButton);
+  }
+
+  const acceptSwap = $("acceptSwap");
+
+  if (acceptSwap) {
+    acceptSwap.addEventListener("click", () => answerSwap(true));
+  }
+
+  const declineSwap = $("declineSwap");
+
+  if (declineSwap) {
+    declineSwap.addEventListener("click", () => answerSwap(false));
+  }
+
+  const practiceButton = $("practiceButton");
+
+  if (practiceButton) {
+    practiceButton.addEventListener("click", startPracticeMode);
+  }
+
+  const backHome = $("backHome");
+
+  if (backHome) {
+    backHome.addEventListener("click", () => {
+      isPracticeMode = false;
+      practiceState = null;
+      currentRoom = null;
+      selectedTarget = null;
+
+      clearInterval(selectionInterval);
+      clearInterval(faceInterval);
+
+      showScreen("home");
+    });
+  }
+}
+
+/* =========================
+   SON İŞƏ SALMA
+========================= */
+
+setupGameControls();
+startFaceAnimations();
+
+/* =========================
+   PART 2 SONU
+========================= */
 
       
