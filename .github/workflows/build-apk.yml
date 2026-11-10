@@ -26,11 +26,10 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      
-   
       - name: Prepare Capacitor
         run: |
           mkdir -p www assets
+
           cp index.html style.css game.js www/
 
           cp assets/file_000000003ba8820ab438ac6c471c9937.png assets/icon.png
@@ -44,14 +43,6 @@ jobs:
 
           npx capacitor-assets generate --android --iconBackgroundColor '#160000'
 
-          npx cap sync android
-          
-          cp index.html style.css game.js www/
-          npm init -y
-          npm install @capacitor/core@6 @capacitor/android@6
-          npm install --save-dev @capacitor/cli@6
-          npx cap init "Masa Arxasında" com.company.behindtable --web-dir=www
-          npx cap add android
           npx cap sync android
 
       - name: Build APK
