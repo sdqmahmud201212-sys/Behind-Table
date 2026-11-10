@@ -27,10 +27,13 @@ jobs:
           java-version: 17
 
       
+   
       - name: Prepare Capacitor
         run: |
-          mkdir -p www
+          mkdir -p www assets
           cp index.html style.css game.js www/
+
+          cp assets/file_000000003ba8820ab438ac6c471c9937.png assets/icon.png
 
           npm init -y
           npm install @capacitor/core@6 @capacitor/android@6
