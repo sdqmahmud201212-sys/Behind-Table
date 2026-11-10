@@ -47,6 +47,7 @@ import {
    2. FIREBASE KONFİQURASİYASI
 ========================================================= */
 
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyBFFVigbO3r5vZbl7vfgzVboChHjXn2h-A",
   authDomain: "behind-table.firebaseapp.com",
@@ -57,7 +58,6 @@ const firebaseConfig = {
   appId: "1:637325725035:web:696bb4b800ed5ba713d02e",
   measurementId: "G-EJN8J5HFGD"
 };
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
