@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#171329">
+  <meta name="description" content="MASA ARXASINDA — retro multiplayer strategy game">
+  <title>MASA ARXASINDA</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="room-light"></div>
+  <div class="grain"></div>
+  <div id="blackout" class="blackout"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">✦</span>
+      MASA ARXASINDA
+    </div>
+    <div id="connection" class="connection">BAĞLANTI GÖZLƏNİLİR</div>
+  </header>
+
+  <main>
+
+    <!-- ANA MENYU -->
+    <section id="home" class="screen active">
+      <div class="intro">
+        <div class="eyebrow">A RETRO MULTIPLAYER GAME</div>
+        <h1>MASA<br><span>ARXASINDA</span></h1>
+        <p class="subtitle">STRATEGİYA • ŞANS • DOSTLAR</p>
+      </div>
+
+      <div class="panel home-panel">
+        <label for="nickname">OYUNÇU LƏQƏBİ</label>
+        <input id="nickname" maxlength="18"
+          placeholder="Ləqəbini daxil et..." autocomplete="off">
+
+        <button id="createRoom" class="primary-btn">
+          YENİ OTAQ YARAT
+        </button>
+
+        <div class="separator"><span>VƏ YA</span></div>
+
+        <label for="roomCodeInput">OTAQ KODU</label>
+        <input id="roomCodeInput" maxlength="4"
+          placeholder="AB12" autocomplete="off">
+
+        <button id="joinRoom" class="secondary-btn">
+          OTAĞA QOŞUL
+        </button>
+
+        <div id="homeError" class="error"></div>
+      </div>
+
+      <div class="panel practice-panel">
+        <div class="panel-heading">
+          <span>BOTLARLA PRAKTİKA</span>
+          <span class="mode-icon">◆</span>
+        </div>
+
+        <p>Oyunun qaydalarını botlara qarşı öyrən.</p>
+
+        <label for="botCount">BOT SAYI</label>
+        <select id="botCount">
+          <option value="1">1 BOT</option>
+          <option value="2">2 BOT</option>
+          <option value="3">3 BOT</option>
+          <option value="4">4 BOT</option>
+          <option value="5">5 BOT</option>
+          <option value="6">6 BOT</option>
+          <option value="7">7 BOT</option>
+          <option value="8">8 BOT</option>
+          <option value="9">9 BOT</option>
+        </select>
+
+        <button id="practiceButton" class="secondary-btn" data-ignore-busy="true">
+          PRAKTİKAYA BAŞLA
+        </button>
+      </div>
+
+      <button id="openRules" class="rules-open-btn" data-ignore-busy="true">
+        <span>▣</span> OYUN QAYDALARINI OXU
+      </button>
+
+      <div class="home-footer">
+        EST. 2026 — NO SECOND CHANCES
+      </div>
+    </section>
+
+    <!-- QAYDALAR -->
+    <section id="rules" class="screen">
+      <div class="section-heading">
+        <div class="eyebrow">GAME MANUAL</div>
+        <h2>OYUN QAYDALARI</h2>
+      </div>
+
+      <div class="panel rules-panel">
+        <h3>OYUNUN MƏQSƏDİ</h3>
+        <p>Masanın arxasında sonuncu sağ qalan oyunçu olmaq. Hər oyunçu 2 canla başlayır.</p>
+
+        <h3>RAUNDLAR</h3>
+        <div class="rules-rounds">
+          <div class="rule-round">
+            <strong>RAUND 1</strong>
+            <span>6 kamera • 2 dolu güllə • 1 kart</span>
+          </div>
+          <div class="rule-round">
+            <strong>RAUND 2</strong>
+            <span>8 kamera • 3 dolu güllə • 2 kart</span>
+          </div>
+          <div class="rule-round">
+            <strong>RAUND 3</strong>
+            <span>9 kamera • 4 dolu güllə • 2 kart</span>
+          </div>
+          <div class="rule-round">
+            <strong>RAUND 4</strong>
+            <span>9 kamera • 5 dolu güllə • 3 kart</span>
+          </div>
+          <div class="rule-round">
+            <strong>RAUND 5</strong>
+            <span>12 kamera • 7 dolu güllə • təsadüfi 3 kart</span>
+          </div>
+        </div>
+
+        <h3>CAN SİSTEMİ</h3>
+        <p>Hər oyunçu 2 canla başlayır. Dolu güllə 1 can aparır. Canlar raundlar arasında bərpa olunmur. Əks təsir kartı maksimum 3 cana qədər əlavə can verə bilər.</p>
+
+        <h3>KARTLAR</h3>
+        <div class="rule-card">
+          <strong>DETEKTİV</strong>
+          <p>Növbəti kameranın dolu və ya boş olduğunu göstərir.</p>
+        </div>
+        <div class="rule-card">
+          <strong>YERDƏYİŞMƏ</strong>
+          <p>Səni hədəfə alan oyunçunun atəşi özünə qayıdır. Həmin oyunçu 1 can itirir.</p>
+        </div>
+        <div class="rule-card">
+          <strong>ƏKS TƏSİR</strong>
+          <p>Dolu güllə ilə vurulanda zərəri bloklayır və 1 can verir. Maksimum can 3-dür.</p>
+        </div>
+        <div class="rule-card">
+          <strong>İFRİTLİK</strong>
+          <p>Seçilmiş hədəfin vurulma ehtimalını 80%-ə qaldırır.</p>
+        </div>
+        <div class="rule-card">
+          <strong>CANINI SEVMƏK</strong>
+          <p>Özünü hədəf seçəndə vurulma ehtimalını 1/4-ə endirir.</p>
+        </div>
+        <div class="rule-card">
+          <strong>İBNƏLİK</strong>
+          <p>Dolu kamerada hədəfi dərhal oyundan çıxarır. Boş kamerada istifadəçi 1 can itirir.</p>
+        </div>
+
+        <h3>ATƏŞ LİMİTİ</h3>
+        <p>Atəş sayı oyunçuların sayına görə müəyyən edilir. Hər raundda kameralar yenidən doldurulur.</p>
+
+        <h3>OYUNUN SONU</h3>
+        <p>Sonuncu sağ qalan oyunçu qalib olur.</p>
+      </div>
+
+      <button id="closeRules" class="primary-btn" data-ignore-busy="true">
+        GERİ QAYIT
+      </button>
+    </section>
+
+    <!-- LOBBİ -->
+    <section id="lobby" class="screen">
+      <div class="section-heading">
+        <div class="eyebrow">PRIVATE ROOM</div>
+        <h2>OYUNÇULAR</h2>
+      </div>
+
+      <div class="room-code-box">
+        <span>OTAQ KODU</span>
+        <strong id="roomCodeDisplay">----</strong>
+        <button id="copyCode" class="small-btn">KOPYALA</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-heading">
+          <span>İŞTİRAKÇILAR</span>
+          <strong id="playerCount">0/10</strong>
+        </div>
+        <div id="playerList" class="player-list"></div>
+      </div>
+
+      <div class="panel character-panel">
+        <label for="characterSelect">PERSONAJINI SEÇ</label>
+        <select id="characterSelect"></select>
+      </div>
+
+      <div class="ready-panel">
+        <div id="readyStatus">HAZIRLIQ GÖZLƏNİLİR</div>
+        <button id="readyButton" class="secondary-btn">
+          HAZIRAM
+        </button>
+      </div>
+
+      <p id="lobbyHint" class="hint"></p>
+
+      <button id="startGame" class="primary-btn">
+        OYUNU BAŞLAT
+      </button>
+      <button id="leaveLobby" class="text-btn" data-ignore-busy="true">
+        OTAQDAN ÇIX
+      </button>
+    </section>
+
+    <!-- KART SEÇİMİ -->
+    <section id="cardSelection" class="screen">
+      <div class="section-heading">
+        <div class="eyebrow">CHOOSE YOUR STRATEGY</div>
+        <h2>KARTLARINI SEÇ</h2>
+        <p id="cardSelectionDescription">
+          Bu raund üçün kartlarını seç.
+        </p>
+      </div>
+
+      <div class="card-selection-info">
+        <div>
+          <span>RAUND</span>
+          <strong id="cardRound">1</strong>
+        </div>
+        <div>
+          <span>SEÇİLƏCƏK KART</span>
+          <strong id="cardsToChoose">1</strong>
+        </div>
+        <div>
+          <span>QALAN VAXT</span>
+          <strong id="cardTimer">30</strong>
+        </div>
+      </div>
+
+      <div id="cardGrid" class="card-grid">
+
+        <button class="game-card" data-card="detective">
+          <div class="card-image card-detective">🔍</div>
+          <div class="card-name">DETEKTİV</div>
+          <p class="card-description">Növbəti kameranın dolu və ya boş olduğunu öyrən.</p>
+        </button>
+
+        <button class="game-card" data-card="swap">
+          <div class="card-image card-swap">↔</div>
+          <div class="card-name">YERDƏYİŞMƏ</div>
+          <p class="card-description">Sənə atəş açan oyunçunun zərbəsini özünə qaytar.</p>
+        </button>
+
+        <button class="game-card" data-card="counter">
+          <div class="card-image card-counter">♥</div>
+          <div class="card-name">ƏKS TƏSİR</div>
+          <p class="card-description">Dolu gülləni blokla və 1 əlavə can qazan.</p>
+        </button>
+
+        <button class="game-card" data-card="witch">
+          <div class="card-image card-witch">✦</div>
+          <div class="card-name">İFRİTLİK</div>
+          <p class="card-description">Hədəfin vurulma ehtimalını 80%-ə qaldır.</p>
+        </button>
+
+        <button class="game-card" data-card="selfLove">
+          <div class="card-image card-selflove">♡</div>
+          <div class="card-name">CANINI SEVMƏK</div>
+          <p class="card-description">Özünü hədəf seçəndə vurulma ehtimalını 1/4-ə endir.</p>
+        </button>
+
+        <button class="game-card" data-card="evil">
+          <div class="card-image card-evil">☠</div>
+          <div class="card-name">İBNƏLİK</div>
+          <p class="card-description">Dolu kamerada hədəfi dərhal oyundan çıxar.</p>
+        </button>
+
+      </div>
+
+      <div class="selection-footer">
+        <span id="selectedCardCount">0 kart seçilib</span>
+        <button id="confirmCards" class="primary-btn" disabled>
+          SEÇİMİ TƏSDİQLƏ
+        </button>
+      </div>
+    </section>
+
+    <!-- OYUN -->
+    <section id="game" class="screen game-screen">
+
+      <div class="game-header">
+        <div>
+          <div class="eyebrow">THE ROUND IS IN PROGRESS</div>
+          <h2>MASA ARXASINDA</h2>
+        </div>
+        <button id="leaveGame" class="small-btn danger-btn" data-ignore-busy="true">ÇIX</button>
+      </div>
+
+      <div class="game-stats">
+        <div class="stat">
+          <span>OTAQ</span>
+          <strong id="gameRoomCode">----</strong>
+        </div>
+        <div class="stat">
+          <span>CANLI</span>
+          <strong id="aliveCount">0 OYUNÇU</strong>
+        </div>
+        <div class="stat">
+          <span>RAUND</span>
+          <strong id="roundLabel">1/5</strong>
+        </div>
+      </div>
+
+      <div class="bullet-info">
+        <div>
+          <span>KAMERALAR</span>
+          <strong id="chamberCount">6</strong>
+        </div>
+        <div>
+          <span>QALAN GÜLLƏ</span>
+          <strong id="bulletsLeft">2</strong>
+        </div>
+        <div>
+          <span>ATƏŞ SAYI</span>
+          <strong id="shotsTaken">0</strong>
+        </div>
+        <div>
+          <span>ATƏŞ LİMİTİ</span>
+          <strong id="shotLimit">2</strong>
+        </div>
+      </div>
+
+      <div class="turn-box">
+        <div class="turn-indicator">●</div>
+        <strong id="turnLabel">NÖVBƏ GÖZLƏNİLİR</strong>
+      </div>
+
+      <!-- HADİSƏLƏR PANELİ -->
+      <div class="panel event-highlight-panel">
+        <div class="panel-heading">
+          <span>SON HADİSƏ</span>
+          <span class="live-dot">● LIVE</span>
+        </div>
+        <div id="latestEvent" class="latest-event">
+          Oyun başlamağa hazırdır.
+        </div>
+      </div>
+
+      <!-- MASA -->
+      <div class="table-scene" id="tableScene">
+        <div class="lamp-glow"></div>
+
+        <div class="hanging-lamp">
+          <div class="lamp-cord"></div>
+          <div class="lamp-shade"></div>
+        </div>
+
+        <div class="table-ring">
+          <div class="table-inner"></div>
+        </div>
+
+        <div id="seatList" class="seat-list"></div>
+
+        <div id="tableGun" class="table-gun">
+          <svg viewBox="0 0 200 100">
+            <path class="gun-barrel" d="M95 35 L190 35 L190 55 L95 55 Z"/>
+            <path class="gun-frame" d="M45 30 L105 30 L120 60 L100 72 L50 65 Z"/>
+            <circle class="gun-cylinder" cx="85" cy="48" r="22"/>
+            <circle class="gun-cylinder-hole" cx="85" cy="48" r="9"/>
+            <path class="gun-handle" d="M48 57 L80 65 L65 95 L40 85 Z"/>
+            <path class="gun-trigger" d="M110 60 Q125 75 112 80"/>
+            <circle class="gun-screw" cx="52" cy="42" r="3"/>
+          </svg>
+        </div>
+
+        <div class="shot-effect" id="shotEffect">
+          <div class="shot-burst"></div>
+          <div class="shot-word">BANG!</div>
+          <div class="shot-caption">MASA ARXASINDA</div>
+        </div>
+      </div>
+
+      <!-- OYUNÇU HƏRƏKƏTLƏRİ -->
+      <div class="panel action-panel">
+        <div class="eyebrow">YOUR DECISION</div>
+        <h3 id="actionTitle">NÖVBƏ GÖZLƏNİLİR</h3>
+        <p id="actionDescription">Oyun davam edir.</p>
+
+        <div id="targetArea" class="target-area"></div>
+
+        <div id="activeCards" class="active-cards"></div>
+
+        <button id="shootButton" class="primary-btn" disabled>
+          HƏDƏFİ TƏSDİQLƏ VƏ ATƏŞ AÇ
+        </button>
+
+        <div id="shotResult" class="shot-result"></div>
+      </div>
+
+      <!-- OYUN HADİSƏLƏRİ -->
+      <div class="panel log-panel">
+        <div class="panel-heading">
+          <span>OYUN HADİSƏLƏRİ</span>
+          <span class="live-dot">● LIVE</span>
+        </div>
+        <div id="eventLog" class="event-log"></div>
+      </div>
+
+    </section>
+
+    <!-- YERDƏYİŞMƏ TƏSDİQİ -->
+    <section id="swapPrompt" class="modal-overlay">
+      <div class="modal-box modal-content">
+        <div class="modal-symbol">↔</div>
+        <h2>YERDƏYİŞMƏ?</h2>
+        <p id="swapMessage">Bir oyunçu səni hədəfə alıb.</p>
+        <div class="modal-actions">
+          <button id="acceptSwap" class="primary-btn">HƏ</button>
+          <button id="declineSwap" class="secondary-btn">YOX</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- OYUNUN SONU -->
+    <section id="ended" class="screen ended-screen">
+      <div class="eyebrow">GAME OVER</div>
+      <div class="end-symbol">✦</div>
+      <h2>OYUN BİTDİ</h2>
+      <p class="winner-label">MASANIN SONUNCU SAHİBİ</p>
+      <h1 id="winnerTitle">----</h1>
+      <p id="winnerText"></p>
+
+      <button id="backHome" class="primary-btn" data-ignore-busy="true">
+        ƏSAS MENYUYA QAYIT
+      </button>
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <footer class="footer">
+    <span>MASA ARXASINDA</span>
+    <span>NO SECOND CHANCES</span>
+  </footer>
+
+  <script type="module" src="game.js"></script>
+</body>
+</html>
