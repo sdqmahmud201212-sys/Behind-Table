@@ -1012,3 +1012,71 @@ footer.footer {
   font-size: 9px;
   letter-spacing: 1px;
 }
+/* OYUNÇU OTURACAQLARI - DAİRƏVİ YERLƏŞDİRMƏ */
+#seatList {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.seat,
+.player-seat {
+  position: absolute;
+  width: 95px;
+  min-height: 80px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+  color: var(--white);
+  background: #2a1d23;
+  border: 2px solid #a77b62;
+  border-radius: 11px;
+  box-shadow: 0 4px 0 #100e20;
+  transform: translate(-50%, -50%);
+  transition: border-color .2s, transform .2s;
+  pointer-events: auto !important;
+  cursor: pointer;
+}
+
+/* Oyunçuları masanın ətrafına avtomatik səpələmək üçün mövqe hesablaması */
+.seat:nth-child(1) { top: 12%; left: 50%; }
+.seat:nth-child(2) { top: 25%; left: 82%; }
+.seat:nth-child(3) { top: 60%; left: 88%; }
+.seat:nth-child(4) { top: 88%; left: 68%; }
+.seat:nth-child(5) { top: 88%; left: 32%; }
+.seat:nth-child(6) { top: 60%; left: 12%; }
+.seat:nth-child(7) { top: 25%; left: 18%; }
+.seat:nth-child(8) { top: 40%; left: 50%; }
+.seat:nth-child(9) { top: 75%; left: 50%; }
+.seat:nth-child(10) { top: 12%; left: 30%; }
+
+.seat.selected-target {
+  border-color: var(--yellow) !important;
+  box-shadow: 0 0 15px var(--yellow) !important;
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+.seat.eliminated,
+.seat.dead {
+  filter: grayscale(1);
+  opacity: .45;
+}
+
+.seat-name {
+  font-size: 10px;
+  font-weight: 900;
+  max-width: 85px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #f0d5b1;
+}
+
+.seat-hearts {
+  font-size: 10px;
+  letter-spacing: 1px;
+}
