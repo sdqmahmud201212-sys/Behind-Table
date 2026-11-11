@@ -14,6 +14,17 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebas
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 import { getDatabase, ref, set, get, update, onValue, runTransaction, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
 /* ========================================================= 2. FIREBASE KONFİQURASİYASI ========================================================= */
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyBFFVigbO3r5vZbl7vfgzVboChHjXn2h-A",
+  authDomain: "behind-table.firebaseapp.com",
+  databaseURL: "https://behind-table-default-rtdb.firebaseio.com",
+  projectId: "behind-table",
+  storageBucket: "behind-table.firebasestorage.app",
+  messagingSenderId: "637325725035",
+  appId: "1:637325725035:web:696bb4b800ed5ba713d02e",
+  measurementId: "G-EJN8J5HFGD"
+};
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional const firebaseConfig = { apiKey: "AIzaSyBFFVigbO3r5vZbl7vfgzVboChHjXn2h-A", authDomain: "behind-table.firebaseapp.com", databaseURL: "https://behind-table-default-rtdb.firebaseio.com", projectId: "behind-table", storageBucket: "behind-table.firebasestorage.app", messagingSenderId: "637325725035", appId: "1:637325725035:web:696bb4b800ed5ba713d02e", measurementId: "G-EJN8J5HFGD" }; const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getDatabase(app);
 /* ========================================================= 3. ƏSAS DƏYİŞƏNLƏR ========================================================= */
 let uid = null; let currentRoom = null; let roomData = null;
