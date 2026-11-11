@@ -1013,6 +1013,7 @@ footer.footer {
   letter-spacing: 1px;
 }
 /* OYUNÇU OTURACAQLARI - DAİRƏVİ YERLƏŞDİRMƏ */
+/* OYUNÇU OTURACAQLARI - MASANIN ƏTRAFINDA DİNAMİK DÜZMƏ */
 #seatList {
   position: absolute;
   inset: 0;
@@ -1042,17 +1043,17 @@ footer.footer {
   cursor: pointer;
 }
 
-/* Oyunçuları masanın ətrafına avtomatik səpələmək üçün mövqe hesablaması */
+/* 10 oyunçunun masanın oval formasına uyğun səliqəli dairəvi düzülüşü */
 .seat:nth-child(1) { top: 12%; left: 50%; }
-.seat:nth-child(2) { top: 25%; left: 82%; }
-.seat:nth-child(3) { top: 60%; left: 88%; }
-.seat:nth-child(4) { top: 88%; left: 68%; }
-.seat:nth-child(5) { top: 88%; left: 32%; }
-.seat:nth-child(6) { top: 60%; left: 12%; }
-.seat:nth-child(7) { top: 25%; left: 18%; }
-.seat:nth-child(8) { top: 40%; left: 50%; }
-.seat:nth-child(9) { top: 75%; left: 50%; }
-.seat:nth-child(10) { top: 12%; left: 30%; }
+.seat:nth-child(2) { top: 22%; left: 78%; }
+.seat:nth-child(3) { top: 50%; left: 88%; }
+.seat:nth-child(4) { top: 78%; left: 75%; }
+.seat:nth-child(5) { top: 88%; left: 50%; }
+.seat:nth-child(6) { top: 78%; left: 25%; }
+.seat:nth-child(7) { top: 50%; left: 12%; }
+.seat:nth-child(8) { top: 22%; left: 22%; }
+.seat:nth-child(9) { top: 35%; left: 35%; }
+.seat:nth-child(10) { top: 35%; left: 65%; }
 
 .seat.selected-target {
   border-color: var(--yellow) !important;
@@ -1079,4 +1080,4 @@ footer.footer {
 .seat-hearts {
   font-size: 10px;
   letter-spacing: 1px;
-}
+                    }
