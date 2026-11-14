@@ -1670,9 +1670,3 @@ document.addEventListener("DOMContentLoaded", () => {
   showScreen("home");
   console.log("%cMASA ARXASINDA Engine Ready!", "color:#54e39a;font-weight:bold;font-size:14px;");
 });
-"""
-
-
-with open("game.js", "w", encoding="utf-8") as f:
-    f.write(game_js_content.strip())
-print("game.js created successfully with full logic!")
